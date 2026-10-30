@@ -1,0 +1,28 @@
+{
+  "services": {
+    "frontend": {
+      "root": ".",
+      "framework": "nextjs"
+    },
+    "api": {
+      "root": "services/api",
+      "entrypoint": "src/main.rs"
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/api/api(/.*)?",
+      "destination": {
+        "type": "service",
+        "service": "api"
+      }
+    },
+    {
+      "source": "/(.*)",
+      "destination": {
+        "type": "service",
+        "service": "frontend"
+      }
+    }
+  ]
+}

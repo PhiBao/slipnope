@@ -1,0 +1,75 @@
+@import "tailwindcss";
+
+@theme {
+  --color-ink: #0a0906;
+  --color-panel: #141109;
+  --color-panel2: #1c170c;
+  --color-line: #2e2716;
+  --color-amber: #ffb300;
+  --color-amber-dim: #b97e04;
+  --color-cream: #f5ecd7;
+  --color-faded: #a29372;
+  --color-good: #4ade80;
+  --color-bad: #ff4d2e;
+  --font-display: "Archivo", sans-serif;
+  --font-num: "IBM Plex Mono", monospace;
+}
+
+html {
+  background: var(--color-ink);
+}
+
+body {
+  background:
+    radial-gradient(1200px 500px at 80% -10%, rgba(255, 179, 0, 0.07), transparent 60%),
+    var(--color-ink);
+  color: var(--color-cream);
+  font-family: var(--font-display);
+}
+
+.num {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+.hazard {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    var(--color-amber) 0 14px,
+    #0a0906 14px 28px
+  );
+}
+
+@keyframes stamp-in {
+  0% {
+    transform: scale(2.2) rotate(-10deg);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(0.94) rotate(-8deg);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1) rotate(-8deg);
+    opacity: 1;
+  }
+}
+
+.stamp {
+  animation: stamp-in 0.28s cubic-bezier(0.2, 1.4, 0.4, 1) both;
+}
+
+@keyframes blinkdot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.25; }
+}
+
+.blink {
+  animation: blinkdot 1.6s ease-in-out infinite;
+}
+
+::selection {
+  background: var(--color-amber);
+  color: #0a0906;
+}
