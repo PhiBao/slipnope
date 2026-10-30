@@ -239,7 +239,7 @@ async fn stats(State(state): State<Arc<AppState>>) -> Json<Stats> {
         entries: guard.len(),
         blocks,
         fills: guard.len() - blocks,
-        saved_usd_total: (guard
+        saved_usd_total: 0.0 + (guard
             .iter()
             .filter(|e| e.decision == "BLOCK")
             .map(|e| e.saved_usd)
