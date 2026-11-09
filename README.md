@@ -80,7 +80,9 @@ services/api/ (Rust, Axum)
 
 **Verified mainnet (8453):** PoolManager `0x498581fF718922c3f8e6A244956aF099B2652b2b` · NVDAc `0xb20000000000000000000078ee7ce2fE4908108C` (8dp) / feed `0x04689a41629776563E6822F76f2e57D148d28513` ($179.49 at fork time) · AAPLc feed `0x787f13dEa48Db0897CbCDD985de77809D837F988` · TSLAc feed `0xFaf869185383a24F8cb00e27BdA6b63B9905DCb4` · USDC `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913` (6dp).
 
-**Verified Sepolia (84532, self-deployed stack):** PoolManager `0x7d5C9F16EfE4343b65C8dbbD8733131f240DFDeD` · SlipNope `0xcc1cb596c75aed51ffeb52dca2887b6606128080` (flags `0x80`) · Router `0xC3c3Ae1957e3D679332203f488F21bd3Ea85867f` · MockStock NVDAc-like `0x59A0624569E29c8721AC5365821d0da163d1B38f` (8dp) · Mock USDC `0xBcE84A6C7bEC94BFd5B71Cb6014090b073A94b82` (6dp) · MockFeed `0x94bF2d7Df98f7b6237a45ff9963Ff1783FB6A2d1` ($179.49).
+**Production mainnet (8453):** SlipNope `0xe370154e9f41c5c7c9abd62154680fae0449c080` (flags `0x80`) · Router `0x645174D655814839a85Bd80D2F54b35A7160465E` · VanityFactory `0x333bD2996F0098f2Ec5fd56D5E3f70F05C116D85` · guarded NVDAc/USDC pool (tickSpacing 10, Chainlink feed `0x0468…8513`), seeded at fair (pool == fair to the wei), `GuardAllowed` OK-swap verified (tx `0xe6f306e4…7e17`). One mis-initialized tickSpacing-60 pool exists with no liquidity and no funds (superseded by the spacing-10 pool).
+
+**Verified Sepolia (84532, self-deployed stack):** PoolManager `0x7d5C9F16EfE4343b65C8dbbD8733131f240DFDeD` · SlipNope `0xcc1cb596c75aed51ffeb52dca2887b6606128080` (flags `0x80`) · Router `0xC3c3Ae1957e3D679332203f488F21bd3Ea85867f` · MockStock NVDAc-like `0x59A0624569E29c8721AC5365821d0da163d1B38f` (8dp) · Mock USDC `0xBcE84A6C7bEC94BFd5B71Cb6014090b073A94b82` (6dp) · MockFeed `0x94bF2d7Df98f7b6237a45ff9963Ff1783FB6A2d1` ($179.49). Escape verified: full liquidity burn returns 100% of seeded principal to the wei (tx `0xc18b889b…fb6fee`).
 
 ## 4. Run it
 
