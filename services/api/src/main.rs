@@ -1,7 +1,7 @@
-//! RobinHook API — Rust (Axum) support service.
+//! SlipNope API — Rust (Axum) support service.
 //!
 //! Responsibilities (deliberately thin; the hook is the product):
-//!   GET  /health   liveness + chain id check against the Robinhood Chain RPC
+//!   GET  /health   liveness + chain id check against the Base RPC
 //!   GET  /board    live Chainlink fair prices + NVDA market premium (v3 pool),
 //!                  computed server-side from raw eth_call — same numbers the
 //!                  hook enforces, independently reproducible
@@ -30,18 +30,16 @@ use tower_http::cors::CorsLayer;
 
 // ---------------------------------------------------------------- consts
 
-const DEFAULT_RPC: &str = "https://rpc.mainnet.chain.robinhood.com";
+const DEFAULT_RPC: &str = "https://mainnet.base.org";
 
-// Chainlink feeds (Robinhood Chain mainnet, verified onchain 2026-10-30)
+// Chainlink tokenized-equity feeds (Base mainnet, verified onchain 2026-11-09)
 const FEEDS: [(&str, &str); 3] = [
-    ("NVDA", "0x379EC4f7C378F34a1B47E4F3cbeBCbAC3E8E9F15"),
-    ("AAPL", "0x6B22A786bAa607d76728168703a39Ea9C99f2cD0"),
-    ("TSLA", "0x4A1166a659A55625345e9515b32adECea5547C38"),
+    ("NVDAc", "0x04689a41629776563E6822F76f2e57D148d28513"),
+    ("AAPLc", "0x787f13dEa48Db0897CbCDD985de77809D837F988"),
+    ("TSLAc", "0xFaf869185383a24F8cb00e27BdA6b63B9905DCb4"),
 ];
-const NVDA_V3_POOL: &str = "0xd4EB21209C4D6093f80B5b84f5C45cc093EA14a3";
-// latestRoundData() selector / slot0() selector
+// latestRoundData() selector
 const SEL_LATEST_ROUND: &str = "0xfeaf968c";
-const SEL_SLOT0: &str = "0x3850c7bd";
 
 // ---------------------------------------------------------------- types
 
@@ -131,20 +129,6 @@ fn decode_feed(hex: &str) -> Option<(f64, u64)> {
     Some((answer, updated))
 }
 
-/// NVDA human price from v3 slot0 sqrtPriceX96 (word 0).
-/// token0 = USDG (6dp), token1 = NVDA (18dp): price = 10^12 / (sqrt/2^96)^2
-fn decode_v3_nvda_price(hex: &str) -> Option<f64> {
-    if hex.len() < 64 {
-        return None;
-    }
-    let sqrt = u128::from_str_radix(&hex[..64], 16).ok()? as f64;
-    let ratio = (sqrt / (2f64.powi(96))).powi(2);
-    if ratio <= 0.0 {
-        return None;
-    }
-    Some(1e12 / ratio)
-}
-
 fn now_secs() -> u64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
 }
@@ -155,8 +139,8 @@ async fn health(State(state): State<Arc<AppState>>) -> Json<serde_json::Value> {
     let chain = eth_call(&state, FEEDS[0].1, SEL_LATEST_ROUND).await;
     Json(serde_json::json!({
         "ok": chain.is_ok(),
-        "service": "robinhook-api",
-        "chainId": 4663,
+        "service": "slipnope-api",
+        "chainId": 8453,
         "rpc": state.rpc,
         "feedReachable": chain.is_ok(),
     }))
@@ -164,20 +148,13 @@ async fn health(State(state): State<Arc<AppState>>) -> Json<serde_json::Value> {
 
 async fn board(State(state): State<Arc<AppState>>) -> Result<Json<Vec<BoardRow>>, StatusCode> {
     let mut rows = Vec::new();
-    let mut nvda_market: Option<f64> = None;
-    if let Ok(hex) = eth_call(&state, NVDA_V3_POOL, SEL_SLOT0).await {
-        nvda_market = decode_v3_nvda_price(&hex);
-    }
-    for (i, (symbol, feed)) in FEEDS.iter().enumerate() {
+    for (symbol, feed) in FEEDS.iter() {
         let hex = eth_call(&state, feed, SEL_LATEST_ROUND)
             .await
             .map_err(|_| StatusCode::BAD_GATEWAY)?;
         let (fair, updated) = decode_feed(&hex).ok_or(StatusCode::BAD_GATEWAY)?;
-        let market = if i == 0 { nvda_market } else { None };
-        let premium_bps = match market {
-            Some(m) if fair > 0.0 => Some((((m - fair) / fair) * 10_000.0).round() as i64),
-            _ => None,
-        };
+        let market: Option<f64> = None;
+        let premium_bps: Option<i64> = None;
         rows.push(BoardRow {
             symbol: symbol.to_string(),
             fair_usd: Some(fair),
@@ -267,7 +244,7 @@ async fn main() {
             }
         }
     }
-    println!("robinhook-api: loaded {} ledger entries from {ledger_file}", entries.len());
+    println!("slipnope-api: loaded {} ledger entries from {ledger_file}", entries.len());
     let _ = HashMap::<String, ()>::new(); // keep HashMap import honest for future indexing
 
     let state = Arc::new(AppState {
@@ -287,6 +264,6 @@ async fn main() {
         .with_state(state);
 
     let listener = tokio::net::TcpListener::bind(("0.0.0.0", port)).await.expect("bind");
-    println!("robinhook-api listening on :{port}");
+    println!("slipnope-api listening on :{port}");
     axum::serve(listener, app).await.expect("serve");
 }

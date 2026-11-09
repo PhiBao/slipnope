@@ -11,27 +11,23 @@ import {Hooks} from "v4-core/libraries/Hooks.sol";
 import {LPFeeLibrary} from "v4-core/libraries/LPFeeLibrary.sol";
 import {TickMath} from "v4-core/libraries/TickMath.sol";
 import {PoolSwapTest} from "v4-core/test/PoolSwapTest.sol";
-import {PoolModifyLiquidityTest} from "v4-core/test/PoolModifyLiquidityTest.sol";
 import {Deployers} from "../lib/v4-core/test/utils/Deployers.sol";
-import {RobinHook} from "../src/RobinHook.sol";
-import {WifBandRegistry} from "../src/WifBandRegistry.sol";
+import {SlipNope} from "../src/SlipNope.sol";
 import {GuardedSwapRouter} from "../src/GuardedSwapRouter.sol";
 import {MockToken, MockFeed, MockStockToken} from "../src/mocks/MockTokens.sol";
 
 /// @dev End-to-end guard tests against a real local PoolManager.
-///      Pool is initialised at price 1.0 (tick 0, both tokens 18dp) so the
+///      Pool initialised at price 1.0 (tick 0, both tokens 18dp) so the
 ///      Chainlink mock feed fully controls perceived deviation:
 ///        feed = $1.00 -> fair, feed = $0.50 -> pool is +100% over fair, etc.
-contract RobinHookTest is Test, Deployers {
+contract SlipNopeTest is Test, Deployers {
     using PoolIdLibrary for PoolKey;
     using CurrencyLibrary for Currency;
 
-    RobinHook hook;
-    WifBandRegistry registry;
+    SlipNope hook;
     GuardedSwapRouter router;
     MockStockToken stock;
     MockToken quote;
-    MockToken wif;
     MockFeed feed;
 
     PoolKey poolKey;
@@ -40,20 +36,16 @@ contract RobinHookTest is Test, Deployers {
     function setUp() public {
         deployFreshManagerAndRouters();
 
-        wif = new MockToken("World is Flat", "WIF", 18);
-        registry = new WifBandRegistry(address(wif));
-
         // Mine a hook address with only the beforeSwap flag (1 << 7).
         uint160 flags = uint160(Hooks.BEFORE_SWAP_FLAG);
-        bytes memory creationCode = type(RobinHook).creationCode;
-        bytes memory ctorArgs = abi.encode(manager, address(registry));
-        (address hookAddr, bytes32 salt) =
-            _mineHook(address(this), flags, creationCode, ctorArgs);
-        hook = new RobinHook{salt: salt}(manager, address(registry));
+        bytes memory creationCode = type(SlipNope).creationCode;
+        bytes memory ctorArgs = abi.encode(manager, address(this));
+        (address hookAddr, bytes32 salt) = _mineHook(address(this), flags, creationCode, ctorArgs);
+        hook = new SlipNope{salt: salt}(manager, address(this));
         require(address(hook) == hookAddr, "mined address mismatch");
 
         stock = new MockStockToken("NVIDIA (mock)", "NVDA", 18);
-        quote = new MockToken("Global Dollar (mock)", "USDG", 18);
+        quote = new MockToken("USD Coin (mock)", "USDC", 18);
         feed = new MockFeed(8, 1e8); // $1.00
 
         Currency cStock = Currency.wrap(address(stock));
@@ -78,7 +70,6 @@ contract RobinHookTest is Test, Deployers {
         quote.mint(address(this), 1_000_000 ether);
         stock.mint(trader, 10_000 ether);
         quote.mint(trader, 10_000 ether);
-        wif.mint(trader, 100_000 ether);
 
         _approveAll(address(this));
         vm.startPrank(trader);
@@ -102,8 +93,6 @@ contract RobinHookTest is Test, Deployers {
         quote.approve(address(modifyLiquidityRouter), type(uint256).max);
         stock.approve(address(router), type(uint256).max);
         quote.approve(address(router), type(uint256).max);
-        wif.approve(address(registry), type(uint256).max);
-        // `who` only used for prank context; approvals are by msg.sender
         who;
     }
 
@@ -125,7 +114,6 @@ contract RobinHookTest is Test, Deployers {
     }
 
     function _buyStock(uint256 quoteIn) internal {
-        // buying stock = receiving stock: zeroForOne depends on stock position
         bool zeroForOne = Currency.unwrap(poolKey.currency0) == address(quote);
         swapRouter.swap(
             poolKey,
@@ -166,19 +154,13 @@ contract RobinHookTest is Test, Deployers {
 
         uint256 balBefore = stock.balanceOf(trader);
         vm.prank(trader);
-        _buyStockFromTrader(100 ether);
+        _buyStock(100 ether);
         assertGt(stock.balanceOf(trader), balBefore);
-    }
-
-    // PoolSwapTest settles from msg.sender's approved balance via test router;
-    // swaps in these tests are executed by `trader` prank where noted.
-    function _buyStockFromTrader(uint256 quoteIn) internal {
-        _buyStock(quoteIn);
     }
 
     function test_buyAboveBand_blocked() public {
         feed.setAnswer(0.5e8); // pool 1.0 vs fair 0.50 -> buying overpays +100%
-        (, , , bool blocked,,) =
+        (,,, bool blocked,,) =
             hook.previewGuard(poolKey, Currency.unwrap(poolKey.currency0) == address(quote), trader);
         assertTrue(blocked);
         vm.expectRevert();
@@ -210,37 +192,14 @@ contract RobinHookTest is Test, Deployers {
         _sellStock(10 ether);
     }
 
-    function test_oraclePaused_blocks() public {
-        stock.setOraclePaused(true);
+    function test_frozenFeed_blocksLikeStale() public {
+        // Base Chainlink equity feeds freeze during corporate actions and
+        // off-hours: updatedAt stops advancing. After maxStale, the guard
+        // must fail closed exactly like any stale feed.
+        feed.setUpdatedAt(block.timestamp);
+        vm.warp(block.timestamp + 5 days);
         vm.expectRevert();
         _buyStock(10 ether);
-    }
-
-    function test_wifStake_tightensBand() public {
-        vm.startPrank(trader);
-        registry.stake(1_000 ether);
-        registry.setBand(100); // 1%
-        vm.stopPrank();
-
-        feed.setAnswer(0.98e8); // ~2.04% adverse: allowed by default, blocked at 1%
-        (, uint24 band,, bool blocked,,) =
-            hook.previewGuard(poolKey, Currency.unwrap(poolKey.currency0) == address(quote), trader);
-        assertEq(uint256(band), 100);
-        assertTrue(blocked);
-
-        vm.expectRevert();
-        _buyStock(10 ether);
-    }
-
-    function test_unstake_restoresDefaultBand() public {
-        vm.startPrank(trader);
-        registry.stake(1_000 ether);
-        registry.setBand(100);
-        registry.unstake(1_000 ether);
-        vm.stopPrank();
-        assertEq(registry.getBandBps(trader), 0);
-        (, uint24 band,,,,) = hook.previewGuard(poolKey, true, trader);
-        assertEq(uint256(band), 300);
     }
 
     function test_guardedRouter_swapAndBandEnforced() public {

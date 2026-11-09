@@ -1,7 +1,7 @@
 "use client";
 
-import { useReadContracts } from "wagmi";
-import { STOCKS, NVDA_V3_POOL, feedAbi, v3PoolAbi, v3NvdaPrice, fmtUsd, EXPLORER } from "@/lib/contracts";
+import { useReadContract, useReadContracts } from "wagmi";
+import { SLIPNOPE, STOCKS, feedAbi, hookAbi, nvdaPoolKey, fmtUsd, EXPLORER } from "@/lib/contracts";
 
 function ageLabel(updatedAt: bigint): string {
   const age = Math.max(0, Math.floor(Date.now() / 1000) - Number(updatedAt));
@@ -12,16 +12,21 @@ function ageLabel(updatedAt: bigint): string {
 
 export default function Board() {
   const { data, isLoading } = useReadContracts({
-    contracts: [
-      ...STOCKS.map((s) => ({ address: s.feed, abi: feedAbi, functionName: "latestRoundData" as const })),
-      { address: NVDA_V3_POOL, abi: v3PoolAbi, functionName: "slot0" as const },
-    ],
+    contracts: STOCKS.map((s) => ({ address: s.feed, abi: feedAbi, functionName: "latestRoundData" as const })),
     query: { refetchInterval: 20_000 },
   });
 
+  const poolKey = nvdaPoolKey();
+  const { data: guardedPoolPrice } = useReadContract({
+    address: SLIPNOPE ? (SLIPNOPE as `0x${string}`) : undefined,
+    abi: hookAbi,
+    functionName: "poolPriceE18",
+    args: poolKey ? [poolKey] : undefined,
+    query: { enabled: Boolean(SLIPNOPE && poolKey), refetchInterval: 20_000 },
+  });
+
   const nvdaFair = data?.[0]?.status === "success" ? Number(data[0].result[1]) / 1e8 : null;
-  const nvdaMarket =
-    data?.[3]?.status === "success" ? v3NvdaPrice(data[3].result[0] as bigint) : null;
+  const nvdaMarket = guardedPoolPrice ? Number(guardedPoolPrice) / 1e18 : null;
   const premiumBps =
     nvdaFair && nvdaMarket ? Math.round(((nvdaMarket - nvdaFair) / nvdaFair) * 10000) : null;
 
@@ -33,14 +38,14 @@ export default function Board() {
         </h2>
         <span className="num text-[11px] text-[var(--color-faded)]">
           <span className="inline-block w-2 h-2 rounded-full bg-[var(--color-good)] mr-2 blink" />
-          Chainlink fair · Uniswap market · live on Robinhood Chain
+          Chainlink fair · guarded pool market · live on Base
         </span>
       </div>
 
       <div className="mt-3 border border-[var(--color-line)] bg-[var(--color-panel)]">
         <div className="grid grid-cols-[1fr_1fr] md:grid-cols-[1.2fr_1fr_1fr_1fr_0.9fr] text-[10px] tracking-[0.22em] uppercase text-[var(--color-faded)] border-b border-[var(--color-line)]">
           <div className="px-4 py-2.5">Stock token</div>
-          <div className="px-4 py-2.5 hidden md:block">Market (DEX)</div>
+          <div className="px-4 py-2.5 hidden md:block">Market (pool)</div>
           <div className="px-4 py-2.5">Fair (Chainlink)</div>
           <div className="px-4 py-2.5 hidden md:block">Premium</div>
           <div className="px-4 py-2.5 text-right">Feed age</div>
@@ -67,7 +72,15 @@ export default function Board() {
                 )}
               </div>
               <div className="px-4 py-4 num text-lg hidden md:block text-[var(--color-cream)]">
-                {isNvda ? (nvdaMarket ? `$${fmtUsd(nvdaMarket)}` : "…") : <span className="text-[var(--color-faded)] text-sm">RFQ / AMM</span>}
+                {isNvda ? (
+                  nvdaMarket ? (
+                    `$${fmtUsd(nvdaMarket)}`
+                  ) : (
+                    <span className="text-[var(--color-faded)] text-sm">seeding…</span>
+                  )
+                ) : (
+                  <span className="text-[var(--color-faded)] text-sm">fair only</span>
+                )}
               </div>
               <div className="px-4 py-4 num text-lg text-[var(--color-amber)]">
                 {fair ? `$${fmtUsd(fair)}` : isLoading ? "…" : "—"}
@@ -91,11 +104,15 @@ export default function Board() {
       </div>
 
       <p className="mt-2 text-[11px] leading-relaxed text-[var(--color-faded)] max-w-3xl">
-        Fair = Chainlink total-return feed (share price × ERC-8056 multiplier, read onchain). Market = live Uniswap v3
-        NVDA/USDG. When the two disagree, somebody is about to overpay.{" "}
-        <a className="underline decoration-[var(--color-amber-dim)] underline-offset-2 hover:text-[var(--color-amber)]" href={`${EXPLORER}/address/${NVDA_V3_POOL}`} target="_blank" rel="noreferrer">
-          Verify the market pool ↗
-        </a>
+        Fair = Chainlink total-return feed (share price × B20 multiplier, read onchain). Market = the guarded pool&apos;s
+        live price. When the two disagree, somebody is about to overpay.{" "}
+        {SLIPNOPE ? (
+          <a className="underline decoration-[var(--color-amber-dim)] underline-offset-2 hover:text-[var(--color-amber)]" href={`${EXPLORER}/address/${SLIPNOPE}`} target="_blank" rel="noreferrer">
+            Verify the hook on BaseScan ↗
+          </a>
+        ) : (
+          <span>Guarded pool seeding — the board above is already live.</span>
+        )}
       </p>
     </section>
   );

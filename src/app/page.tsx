@@ -4,19 +4,10 @@ import { useEffect, useState } from "react";
 import { useAccount, useConnect, useDisconnect, useSwitchChain } from "wagmi";
 import Board from "@/components/Board";
 import GuardCard from "@/components/GuardCard";
-import StakeCard from "@/components/StakeCard";
+import BandCard from "@/components/BandCard";
 import LedgerPanel from "@/components/LedgerPanel";
 import { loadLedger, type LedgerEntry } from "@/lib/ledger";
-import {
-  CHAIN_ID,
-  EXPLORER,
-  POOL_MANAGER,
-  ROBINHOOK,
-  REGISTRY,
-  ROUTER,
-  WIF,
-  shortAddr,
-} from "@/lib/contracts";
+import { CHAIN_ID, EXPLORER, POOL_MANAGER, SLIPNOPE, ROUTER, shortAddr } from "@/lib/contracts";
 
 function WalletButton() {
   const { address, isConnected, chainId } = useAccount();
@@ -41,7 +32,7 @@ function WalletButton() {
         onClick={() => switchChain({ chainId: CHAIN_ID })}
         className="px-4 py-2 bg-[var(--color-bad)] text-black text-sm font-black uppercase tracking-wide"
       >
-        Switch to Robinhood Chain
+        Switch to Base
       </button>
     );
   }
@@ -51,7 +42,7 @@ function WalletButton() {
       className="num px-4 py-2 border border-[var(--color-line)] text-sm hover:border-[var(--color-amber-dim)]"
       title="Disconnect"
     >
-      {shortAddr(address ?? "")} · 4663
+      {shortAddr(address ?? "")} · 8453
     </button>
   );
 }
@@ -87,13 +78,13 @@ export default function Home() {
       <header className="flex items-center justify-between py-5 border-b border-[var(--color-line)]">
         <div className="flex items-center gap-3">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/favicon.svg" alt="RobinHook mark" className="w-9 h-9" />
+          <img src="/favicon.svg" alt="SlipNope mark" className="w-9 h-9" />
           <div className="leading-none">
             <div className="text-xl font-black tracking-tight">
-              ROBIN<span className="text-[var(--color-amber)]">HOOK</span>
+              SLIP<span className="text-[var(--color-amber)]">NOPE</span>
             </div>
             <div className="num text-[9px] tracking-[0.24em] text-[var(--color-faded)] mt-1">
-              UNISWAP V4 FAIR-PRICE GUARD · ROBINHOOD CHAIN
+              UNISWAP V4 FAIR-PRICE GUARD · BASE
             </div>
           </div>
         </div>
@@ -103,15 +94,15 @@ export default function Home() {
       {/* hero */}
       <section className="py-10 sm:py-14">
         <h1 className="text-4xl sm:text-6xl font-black leading-[0.95] tracking-tight max-w-3xl">
-          Never overpay
+          Overpay?
           <br />
-          for stocks. <span className="text-[var(--color-amber)]">The pool enforces it.</span>
+          <span className="text-[var(--color-amber)]">Nope.</span>
         </h1>
         <p className="mt-5 text-base sm:text-lg text-[var(--color-faded)] leading-relaxed max-w-2xl">
-          Stock tokens trade 24/7. The stock market doesn&apos;t. In the gap, thin books drift far from fair value —
-          and every wallet lets you click buy anyway. RobinHook is a Uniswap v4 hook that reads Chainlink fair value
+          Tokenized stocks trade 24/7. The stock market doesn&apos;t. In the gap, thin books drift far from fair value —
+          and every wallet lets you click buy anyway. SlipNope is a Uniswap v4 hook that reads Chainlink fair value
           inside your swap and <span className="text-[var(--color-cream)]">reverts the trade</span> if you&apos;d
-          overpay beyond your band.
+          overpay beyond the band.
         </p>
         <div className="mt-6 flex gap-6 num text-xs text-[var(--color-faded)] flex-wrap">
           <span>
@@ -123,7 +114,7 @@ export default function Home() {
           <span>
             <span className="text-[var(--color-bad)] font-bold">BLOCK</span> beyond band · swap reverts
           </span>
-          <span>Stale oracle? Fails closed. Always.</span>
+          <span>Frozen feed? Fails closed. Always.</span>
         </div>
       </section>
 
@@ -131,7 +122,7 @@ export default function Home() {
         <Board />
         <GuardCard onLedgerChange={refresh} />
         <div className="grid lg:grid-cols-2 gap-6 items-stretch">
-          <StakeCard />
+          <BandCard />
           <LedgerPanel entries={entries} />
         </div>
       </div>
@@ -142,22 +133,22 @@ export default function Home() {
           Verify it yourself
         </div>
         <div className="mt-3 grid sm:grid-cols-2 gap-x-10 text-sm">
-          <ProofRow label="RobinHook (v4 hook)" addr={ROBINHOOK} />
-          <ProofRow label="WifBandRegistry (stake $WIF)" addr={REGISTRY} />
+          <ProofRow label="SlipNope (v4 hook)" addr={SLIPNOPE} />
           <ProofRow label="GuardedSwapRouter" addr={ROUTER} />
-          <ProofRow label="Uniswap v4 PoolManager" addr={POOL_MANAGER} />
-          <ProofRow label="$WIF — World is Flat" addr={WIF} />
+          <ProofRow label="Uniswap v4 PoolManager (Base)" addr={POOL_MANAGER} />
+          <ProofRow label="Chainlink NVDAc feed" addr="0x04689a41629776563E6822F76f2e57D148d28513" />
         </div>
         <p className="mt-4 text-xs leading-relaxed text-[var(--color-faded)] max-w-3xl">
           The guard is one-time-configured and immutable: the Chainlink feed for a pool can never be swapped after
-          setup, there are no admin keys that can weaken a live pool, and a stale or paused oracle blocks every swap
-          rather than guessing. Stock Tokens are restricted in some jurisdictions (including the US) — follow
-          Robinhood&apos;s restricted-country list; nothing here is financial advice.
+          setup, there are no admin keys that can weaken a live pool, and a frozen or stale oracle blocks every swap
+          rather than guessing. Coinbase tokenized stocks are available only outside the US per issuer restrictions —
+          nothing here is financial advice, and this product is not affiliated with or endorsed by Coinbase, Base,
+          Uniswap, or Chainlink.
         </p>
       </section>
 
       <footer className="mt-10 flex items-center justify-between text-[11px] text-[var(--color-faded)] flex-wrap gap-3">
-        <span className="num">ROBINHOOK · BUILT FOR THE WORLD IS FLAT HACKATHON · $WIF AT WORK</span>
+        <span className="num">SLIPNOPE · BUILT FOR BASE STOCKS MAXXING · PROGRAMMABLE STOCK MARKETS</span>
         <span className="num">DASHBOARDS WARN. POOLS ENFORCE.</span>
       </footer>
     </main>

@@ -39,7 +39,7 @@ export default function LedgerPanel({ entries }: { entries: LedgerEntry[] }) {
           <p className="text-sm text-[var(--color-faded)] leading-relaxed">
             No attempts yet. Your fills <em className="not-italic text-[var(--color-cream)]">and your blocks</em> will
             be recorded here — the blocks are the point. Stored locally in your browser
-            {typeof window !== "undefined" && process.env.NEXT_PUBLIC_API_URL ? " and mirrored to the RobinHook API" : ""}.
+            {typeof window !== "undefined" && process.env.NEXT_PUBLIC_API_URL ? " and mirrored to the SlipNope API" : ""}.
           </p>
         ) : (
           <ul className="divide-y divide-[var(--color-line)]">

@@ -6,7 +6,7 @@ RUN cargo build --release
 
 FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/*
-COPY --from=builder /app/target/release/robinhook-api /usr/local/bin/robinhook-api
+COPY --from=builder /app/target/release/slipnope-api /usr/local/bin/slipnope-api
 ENV PORT=8080 LEDGER_FILE=/tmp/ledger.jsonl
 EXPOSE 8080
-CMD ["robinhook-api"]
+CMD ["slipnope-api"]

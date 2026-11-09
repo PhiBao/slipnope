@@ -7,9 +7,9 @@ const archivo = Archivo({ subsets: ["latin"], variable: "--font-display", weight
 const plexMono = IBM_Plex_Mono({ subsets: ["latin"], variable: "--font-num", weight: ["400", "500", "600", "700"] });
 
 export const metadata: Metadata = {
-  title: "RobinHook — never overpay for stocks",
+  title: "SlipNope — overpay? nope.",
   description:
-    "A Uniswap v4 hook on Robinhood Chain that checks every stock-token swap against its Chainlink fair price and blocks the trade if you would overpay. Stake $WIF to tighten your guard.",
+    "A Uniswap v4 fair-price hook on Base that checks every tokenized-stock swap against Chainlink fair value and blocks the trade if you would overpay. SlipNope.",
   icons: { icon: "/favicon.svg" },
 };
 

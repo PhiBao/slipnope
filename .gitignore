@@ -16,3 +16,4 @@ services/api/ledger.jsonl
 
 .vercel/
 .vercel
+.env*

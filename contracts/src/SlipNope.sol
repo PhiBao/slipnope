@@ -12,23 +12,22 @@ import {StateLibrary} from "v4-core/libraries/StateLibrary.sol";
 import {FullMath} from "v4-core/libraries/FullMath.sol";
 import {LPFeeLibrary} from "v4-core/libraries/LPFeeLibrary.sol";
 import {IERC20Metadata} from "openzeppelin-contracts/contracts/token/ERC20/extensions/IERC20Metadata.sol";
-import {IAggregatorV3, IOraclePaused} from "./interfaces/IAggregatorV3.sol";
-import {WifBandRegistry} from "./WifBandRegistry.sol";
+import {IAggregatorV3} from "./interfaces/IAggregatorV3.sol";
 
-/// @title RobinHook — never overpay for stocks on Robinhood Chain
+/// @title SlipNope — never overpay for stocks on Base
 /// @notice A Uniswap v4 hook that checks every swap in a guarded pool against the
 ///         asset's Chainlink fair price, atomically inside `beforeSwap`:
 ///           adverse deviation <= band/2  -> OK   (base fee)
 ///           adverse deviation <= band    -> WARN (deviation-scaled fee override)
 ///           adverse deviation >  band    -> BLOCK (revert, swap cannot execute)
-///           stale / paused / invalid ref -> BLOCK (fail closed, always)
+///           stale / invalid ref -> BLOCK (fail closed, always)
 ///         "Adverse" is direction-aware: buying above fair, or selling below fair.
-///         The default band is 300 bps (3%). $WIF stakers (WifBandRegistry) can
-///         select a tighter personal band, passed via hookData = abi.encode(trader).
+///         The band is 300 bps (3%). Base Chainlink equity feeds run 24/5 and
+///         freeze off-hours by design; staleness is the fail-closed signal.
 /// @dev Implements IHooks directly (only beforeSwap permission, address flag 1<<7).
 ///      Pool config is one-time-write by the deployer: feed can never be swapped
 ///      after configuration, so there is no admin path to weaken a live pool.
-contract RobinHook is IHooks {
+contract SlipNope is IHooks {
     using PoolIdLibrary for PoolKey;
     using StateLibrary for IPoolManager;
 
@@ -37,7 +36,6 @@ contract RobinHook is IHooks {
     uint24 public constant MAX_WARN_FEE = 10_000; // 1.00% cap
 
     IPoolManager public immutable poolManager;
-    WifBandRegistry public immutable bandRegistry; // may be address(0) -> defaults only
     address public immutable owner;
 
     struct PoolGuard {
@@ -71,13 +69,11 @@ contract RobinHook is IHooks {
     error NotConfigured();
     error InvalidReference();
     error StaleReference(uint256 updatedAt, uint256 maxStale);
-    error OraclePaused();
     error OverpayBlocked(uint256 adverseBps, uint24 bandBps, uint256 poolPriceE18, uint256 fairPriceE18);
 
-    constructor(IPoolManager manager_, address bandRegistry_) {
+    constructor(IPoolManager manager_, address owner_) {
         poolManager = manager_;
-        bandRegistry = WifBandRegistry(bandRegistry_);
-        owner = msg.sender;
+        owner = owner_; // explicit: with CREATE2 the sender is the factory, not the deployer
     }
 
     // ------------------------------------------------------------------ admin
@@ -167,7 +163,7 @@ contract RobinHook is IHooks {
         view
         returns (uint256 adverse, uint24 band, uint24 fee, uint256 poolPrice, uint256 fair)
     {
-        fair = _fairPriceE18(g); // reverts Invalid/Stale/Paused -> fail closed
+        fair = _fairPriceE18(g); // reverts Invalid/Stale -> fail closed
         (uint160 sqrtPriceX96,,,) = poolManager.getSlot0(key.toId());
         poolPrice = _poolPriceE18(key, g, sqrtPriceX96);
         band = _bandFor(trader);
@@ -178,10 +174,6 @@ contract RobinHook is IHooks {
     // ------------------------------------------------------------- internals
 
     function _fairPriceE18(PoolGuard memory g) internal view returns (uint256) {
-        // Corporate-action pause: feed holds last value; treat as unavailable (docs.robinhood.com).
-        try IOraclePaused(g.stock).oraclePaused() returns (bool paused) {
-            if (paused) revert OraclePaused();
-        } catch {}
         (uint80 roundId, int256 answer,, uint256 updatedAt, uint80 answeredInRound) =
             IAggregatorV3(g.feed).latestRoundData();
         if (answer <= 0 || updatedAt == 0 || answeredInRound < roundId) revert InvalidReference();
@@ -233,11 +225,9 @@ contract RobinHook is IHooks {
         }
     }
 
-    function _bandFor(address trader) internal view returns (uint24) {
-        if (trader != address(0) && address(bandRegistry) != address(0)) {
-            uint24 custom = bandRegistry.getBandBps(trader);
-            if (custom != 0) return custom;
-        }
+    // Universal band for now; `trader` kept in the signature so a future
+    // staking registry can tighten per-trader bands without an interface break.
+    function _bandFor(address) internal pure returns (uint24) {
         return DEFAULT_BAND_BPS;
     }
 

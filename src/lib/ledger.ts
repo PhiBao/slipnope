@@ -16,7 +16,7 @@ export interface LedgerEntry {
   txHash?: string;
 }
 
-const KEY = "robinhook-ledger-v1";
+const KEY = "slipnope-ledger-v1";
 
 export function loadLedger(): LedgerEntry[] {
   try {

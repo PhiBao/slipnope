@@ -1,4 +1,4 @@
-app = "robinhook-api"
+app = "slipnope-api"
 primary_region = "sin"
 
 [build]

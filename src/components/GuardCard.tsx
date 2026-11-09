@@ -10,9 +10,9 @@ import {
 } from "wagmi";
 import { parseUnits, formatUnits, type Address } from "viem";
 import {
-  ROBINHOOK,
+  SLIPNOPE,
   ROUTER,
-  USDG,
+  USDC,
   STOCKS,
   hookAbi,
   routerAbi,
@@ -36,13 +36,13 @@ export default function GuardCard({ onLedgerChange }: { onLedgerChange: () => vo
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const poolKey = nvdaPoolKey();
-  const deployed = Boolean(ROBINHOOK && ROUTER && poolKey);
-  const zeroForOne = side === "buy"; // currency0 = USDG: buy NVDA pays USDG (0 -> 1)
+  const deployed = Boolean(SLIPNOPE && ROUTER && poolKey);
+  const zeroForOne = side === "buy"; // currency0 = USDC: buy NVDAc pays USDC (0 -> 1)
 
   const trader = (address ?? "0x0000000000000000000000000000000000000000") as Address;
 
   const { data: preview, isLoading: previewLoading } = useReadContract({
-    address: deployed ? (ROBINHOOK as Address) : undefined,
+    address: deployed ? (SLIPNOPE as Address) : undefined,
     abi: hookAbi,
     functionName: "previewGuard",
     args: poolKey ? [poolKey, zeroForOne, trader] : undefined,
@@ -52,10 +52,10 @@ export default function GuardCard({ onLedgerChange }: { onLedgerChange: () => vo
   const { data: balances } = useReadContracts({
     contracts: address
       ? [
-          { address: USDG, abi: erc20Abi, functionName: "balanceOf" as const, args: [address] },
+          { address: USDC, abi: erc20Abi, functionName: "balanceOf" as const, args: [address] },
           { address: STOCKS[0].token, abi: erc20Abi, functionName: "balanceOf" as const, args: [address] },
           {
-            address: side === "buy" ? USDG : STOCKS[0].token,
+            address: side === "buy" ? USDC : STOCKS[0].token,
             abi: erc20Abi,
             functionName: "allowance" as const,
             args: [address, (ROUTER || "0x0000000000000000000000000000000000000000") as Address],
@@ -65,12 +65,12 @@ export default function GuardCard({ onLedgerChange }: { onLedgerChange: () => vo
     query: { refetchInterval: 15_000 },
   });
 
-  const usdgBal = balances?.[0]?.status === "success" ? (balances[0].result as bigint) : 0n;
+  const usdcBal = balances?.[0]?.status === "success" ? (balances[0].result as bigint) : 0n;
   const nvdaBal = balances?.[1]?.status === "success" ? (balances[1].result as bigint) : 0n;
   const allowance = balances?.[2]?.status === "success" ? (balances[2].result as bigint) : 0n;
 
   const amountNum = parseFloat(amount) || 0;
-  const inDecimals = side === "buy" ? 6 : 18;
+  const inDecimals = side === "buy" ? 6 : 8;
   const amountIn = useMemo(() => {
     try {
       return parseUnits(amount || "0", inDecimals);
@@ -110,7 +110,7 @@ export default function GuardCard({ onLedgerChange }: { onLedgerChange: () => vo
     if (verdict === "BLOCK" && adverseBps !== null && poolPrice && fairPrice) {
       recordEntry({
         wallet: address,
-        symbol: "NVDA",
+        symbol: "NVDAc",
         side,
         amountUsd: notionalUsd,
         poolPrice,
@@ -127,7 +127,7 @@ export default function GuardCard({ onLedgerChange }: { onLedgerChange: () => vo
 
     setBusy(true);
     try {
-      const inToken = side === "buy" ? USDG : STOCKS[0].token;
+      const inToken = side === "buy" ? USDC : STOCKS[0].token;
       if (allowance < amountIn) {
         const ah = await writeContractAsync({
           address: inToken,
@@ -153,7 +153,7 @@ export default function GuardCard({ onLedgerChange }: { onLedgerChange: () => vo
       if (adverseBps !== null && poolPrice && fairPrice) {
         recordEntry({
           wallet: address,
-          symbol: "NVDA",
+          symbol: "NVDAc",
           side,
           amountUsd: notionalUsd,
           poolPrice,
@@ -175,7 +175,7 @@ export default function GuardCard({ onLedgerChange }: { onLedgerChange: () => vo
         if (adverseBps !== null && poolPrice && fairPrice) {
           recordEntry({
             wallet: address,
-            symbol: "NVDA",
+            symbol: "NVDAc",
             side,
             amountUsd: notionalUsd,
             poolPrice,
@@ -212,7 +212,7 @@ export default function GuardCard({ onLedgerChange }: { onLedgerChange: () => vo
               The guard <span className="text-[var(--color-amber)]">is the pool.</span>
             </h2>
             <p className="mt-2 text-sm text-[var(--color-faded)] max-w-xl leading-relaxed">
-              Every swap in the RobinHook NVDA/USDG pool is checked against Chainlink fair value{" "}
+              Every swap in the SlipNope NVDAc/USDC pool is checked against Chainlink fair value{" "}
               <em className="not-italic text-[var(--color-cream)]">inside the transaction</em>. Outside your band, the
               swap cannot execute — no warning to ignore, no app to close.
             </p>
@@ -238,7 +238,7 @@ export default function GuardCard({ onLedgerChange }: { onLedgerChange: () => vo
                   side === s ? "bg-[var(--color-amber)] text-black" : "text-[var(--color-faded)] hover:text-[var(--color-cream)]"
                 }`}
               >
-                {s} NVDA
+                {s} NVDAc
               </button>
             ))}
           </div>
@@ -248,9 +248,9 @@ export default function GuardCard({ onLedgerChange }: { onLedgerChange: () => vo
               onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ""))}
               inputMode="decimal"
               className="num w-full bg-transparent py-3 text-2xl font-semibold outline-none"
-              aria-label={side === "buy" ? "Amount in USDG" : "Amount in NVDA"}
+              aria-label={side === "buy" ? "Amount in USDC" : "Amount in NVDAc"}
             />
-            <span className="num text-sm text-[var(--color-faded)]">{side === "buy" ? "USDG" : "NVDA"}</span>
+            <span className="num text-sm text-[var(--color-faded)]">{side === "buy" ? "USDC" : "NVDAc"}</span>
           </label>
           <button
             onClick={handleAction}
@@ -263,10 +263,10 @@ export default function GuardCard({ onLedgerChange }: { onLedgerChange: () => vo
 
         <div className="num mt-2 text-[11px] text-[var(--color-faded)] flex gap-4 flex-wrap">
           <span>
-            Balance: {formatUnits(usdgBal, 6)} USDG · {Number(formatUnits(nvdaBal, 18)).toFixed(4)} NVDA
+            Balance: {formatUnits(usdcBal, 6)} USDC · {Number(formatUnits(nvdaBal, 8)).toFixed(4)} NVDAc
           </span>
           {fee !== null && <span>LP fee this swap: {(fee / 10000).toFixed(2)}%</span>}
-          <span>Your band: ±{(bandBps / 100).toFixed(2)}%</span>
+          <span>Guard band: ±{(bandBps / 100).toFixed(2)}%</span>
         </div>
 
         {/* verdict detail */}
@@ -302,9 +302,9 @@ export default function GuardCard({ onLedgerChange }: { onLedgerChange: () => vo
           <div className="mt-5 border border-dashed border-[var(--color-amber-dim)] p-4 text-sm leading-relaxed">
             <span className="num font-bold text-[var(--color-amber)]">GUARD DEPLOYMENT PENDING — </span>
             <span className="text-[var(--color-faded)]">
-              The RobinHook contracts are built and fork-tested against live Robinhood Chain state (9 unit tests + 3
+              The SlipNope contracts are built and fork-tested against live Base state (7 unit tests + 3
               mainnet-fork tests passing). The guarded swap activates the moment the hook, registry, and router are
-              deployed and the NVDA/USDG pool is seeded. The board above is already live.
+              deployed and the NVDAc/USDC pool is seeded. The board above is already live.
             </span>
           </div>
         )}
@@ -318,7 +318,7 @@ export default function GuardCard({ onLedgerChange }: { onLedgerChange: () => vo
           </p>
         )}
         {!isConnected && deployed && (
-          <p className="mt-4 text-sm text-[var(--color-faded)]">Connect a wallet on Robinhood Chain to trade under the guard.</p>
+          <p className="mt-4 text-sm text-[var(--color-faded)]">Connect a wallet on Base to trade under the guard.</p>
         )}
       </div>
     </section>

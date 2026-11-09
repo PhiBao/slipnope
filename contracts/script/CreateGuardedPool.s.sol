@@ -9,12 +9,12 @@ import {IHooks} from "v4-core/interfaces/IHooks.sol";
 import {LPFeeLibrary} from "v4-core/libraries/LPFeeLibrary.sol";
 import {TickMath} from "v4-core/libraries/TickMath.sol";
 import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
-import {RobinHook} from "../src/RobinHook.sol";
+import {SlipNope} from "../src/SlipNope.sol";
 import {GuardedSwapRouter} from "../src/GuardedSwapRouter.sol";
 
-/// @notice Configures + initialises + seeds one RobinHook guarded pool.
+/// @notice Configures + initialises + seeds one SlipNope guarded pool.
 /// @dev Env:
-///        ROBINHOOK, ROUTER            deployed core addresses
+///        SLIPNOPE, ROUTER            deployed core addresses
 ///        STOCK, FEED, QUOTE           guarded asset, Chainlink feed, quote token
 ///        MAX_STALE                    seconds (default 345600 = 4 days)
 ///        INIT_TICK                    initial pool tick (align to live market!)
@@ -25,10 +25,12 @@ import {GuardedSwapRouter} from "../src/GuardedSwapRouter.sol";
 ///      The broadcaster must hold + approve STOCK and QUOTE for ROUTER before seeding.
 ///      Run: forge script script/CreateGuardedPool.s.sol --rpc-url $RH_RPC --broadcast --private-key $PRIVATE_KEY
 contract CreateGuardedPool is Script {
-    address constant MANAGER = 0x8366a39CC670B4001A1121B8F6A443A643e40951;
+    address constant BASE_MAINNET_MANAGER = 0x498581fF718922c3f8e6A244956aF099B2652b2b;
 
     function run() external {
-        RobinHook hook = RobinHook(vm.envAddress("ROBINHOOK"));
+        IPoolManager manager =
+            IPoolManager(vm.envOr("MANAGER_ADDRESS", address(BASE_MAINNET_MANAGER)));
+        SlipNope hook = SlipNope(vm.envAddress("SLIPNOPE"));
         GuardedSwapRouter router = GuardedSwapRouter(vm.envAddress("ROUTER"));
         address stock = vm.envAddress("STOCK");
         address feed = vm.envAddress("FEED");
@@ -51,7 +53,7 @@ contract CreateGuardedPool is Script {
 
         vm.startBroadcast();
         hook.configurePool(key, feed, stock, maxStale);
-        IPoolManager(MANAGER).initialize(key, TickMath.getSqrtPriceAtTick(initTick));
+        manager.initialize(key, TickMath.getSqrtPriceAtTick(initTick));
         console2.log("POOL_INITIALIZED tick=%s", vm.toString(initTick));
 
         if (seedLiquidity > 0) {
