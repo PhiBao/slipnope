@@ -18,8 +18,7 @@ import {
   routerAbi,
   erc20Abi,
   nvdaPoolKey,
-  MAX_SQRT_PRICE,
-  MIN_SQRT_PRICE,
+  fairSqrtLimits,
   fmtUsd,
   EXPLORER,
 } from "@/lib/contracts";
@@ -137,16 +136,16 @@ export default function GuardCard({ onLedgerChange }: { onLedgerChange: () => vo
         });
         setPendingHash(ah);
       }
+      // Bound the swap ~3% from Chainlink fair: one trade can never walk the
+      // book to an extreme (the hook's afterSwap check is the hard limit).
+      const fairE18 = preview ? preview[5] : 0n;
+      const limits = fairE18 > 0n ? fairSqrtLimits(fairE18) : null;
+      if (!limits) throw new Error("Fair price unavailable — guard cannot bound the swap.");
       const hash = await writeContractAsync({
         address: ROUTER as Address,
         abi: routerAbi,
         functionName: "swapExactInput",
-        args: [
-          poolKey,
-          zeroForOne,
-          amountIn,
-          zeroForOne ? MIN_SQRT_PRICE + 1n : MAX_SQRT_PRICE - 1n,
-        ],
+        args: [poolKey, zeroForOne, amountIn, zeroForOne ? limits.buy : limits.sell],
       });
       setPendingHash(hash);
       setLastTx(hash);

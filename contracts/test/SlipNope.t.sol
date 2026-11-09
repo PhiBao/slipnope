@@ -37,7 +37,7 @@ contract SlipNopeTest is Test, Deployers {
         deployFreshManagerAndRouters();
 
         // Mine a hook address with only the beforeSwap flag (1 << 7).
-        uint160 flags = uint160(Hooks.BEFORE_SWAP_FLAG);
+        uint160 flags = uint160(Hooks.BEFORE_SWAP_FLAG | Hooks.AFTER_SWAP_FLAG);
         bytes memory creationCode = type(SlipNope).creationCode;
         bytes memory ctorArgs = abi.encode(manager, address(this));
         (address hookAddr, bytes32 salt) = _mineHook(address(this), flags, creationCode, ctorArgs);
@@ -200,6 +200,24 @@ contract SlipNopeTest is Test, Deployers {
         vm.warp(block.timestamp + 5 days);
         vm.expectRevert();
         _buyStock(10 ether);
+    }
+
+    function test_postSwap_outOfBandReverts() public {
+        // One huge buy into a thin book: the pre-swap price is fair, so
+        // beforeSwap allows it — afterSwap must revert because the resulting
+        // price would sit outside the band. The whole swap unwinds.
+        uint256 bigIn = 60_000 ether; // 60% of the seeded liquidity range
+        vm.expectRevert(); // PostSwapOutOfBand
+        _buyStock(bigIn);
+    }
+
+    function test_postSwap_smallSwapStaysInBand() public {
+        // A modest swap must still settle: guard does not block normal trading.
+        _buyStock(5 ether);
+        (uint256 adverse,,,,, ) = hook.previewGuard(
+            poolKey, Currency.unwrap(poolKey.currency0) == address(quote), trader
+        );
+        assertLe(adverse, 300);
     }
 
     function test_guardedRouter_swapAndBandEnforced() public {

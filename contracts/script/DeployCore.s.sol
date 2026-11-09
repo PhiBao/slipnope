@@ -25,9 +25,9 @@ contract DeployCore is Script {
             IPoolManager(vm.envOr("MANAGER_ADDRESS", address(BASE_MANAGER)));
         vm.startBroadcast();
 
-        // Mine CREATE2 salt so hook address carries exactly BEFORE_SWAP_FLAG.
+        // Mine CREATE2 salt so the hook address carries beforeSwap + afterSwap flags (0xC0).
         // owner = broadcaster: with CREATE2 the immediate sender is the factory.
-        uint160 flags = uint160(Hooks.BEFORE_SWAP_FLAG);
+        uint160 flags = uint160(Hooks.BEFORE_SWAP_FLAG | Hooks.AFTER_SWAP_FLAG);
         bytes memory bytecode = abi.encodePacked(type(SlipNope).creationCode, abi.encode(manager, msg.sender));
         bytes32 salt;
         address hookAddr;

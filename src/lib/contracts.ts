@@ -176,9 +176,35 @@ export function nvdaPoolKey(): PoolKeyTuple | null {
     currency0: USDC,
     currency1: STOCKS[0].token,
     fee: DYNAMIC_FEE_FLAG,
-    tickSpacing: 60,
+    tickSpacing: 10,
     hooks: SLIPNOPE as Address,
   };
+}
+
+/** Integer sqrt for bigint. */
+function isqrt(n: bigint): bigint {
+  if (n < 2n) return n;
+  let x = n;
+  let y = (x + 1n) / 2n;
+  while (y < x) {
+    x = y;
+    y = (x + n / x) / 2n;
+  }
+  return x;
+}
+
+/**
+ * sqrtPriceX96 bounds derived from the Chainlink fair price (not from the pool
+ * price), so a swap can move at most ~3% before hitting the limit. This keeps
+ * the pool from being pushed to an extreme by one oversized trade — the hook's
+ * afterSwap check is the hard guard, this is the router-side bound.
+ */
+export function fairSqrtLimits(fairPriceE18: bigint): { buy: bigint; sell: bigint } {
+  // pool price raw ratio = 10^20 * 2^96 / fairE18  (USDC 6dp, stock 8dp)
+  const Q96 = 1n << 96n;
+  const ratioX96 = (10n ** 20n * Q96) / fairPriceE18;
+  const sqrtP = isqrt(ratioX96 * Q96);
+  return { buy: (sqrtP * 97n) / 100n, sell: (sqrtP * 103n) / 100n };
 }
 
 export function fmtUsd(n: number, digits = 2): string {

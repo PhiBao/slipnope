@@ -24,7 +24,7 @@ import {IAggregatorV3} from "./interfaces/IAggregatorV3.sol";
 ///         "Adverse" is direction-aware: buying above fair, or selling below fair.
 ///         The band is 300 bps (3%). Base Chainlink equity feeds run 24/5 and
 ///         freeze off-hours by design; staleness is the fail-closed signal.
-/// @dev Implements IHooks directly (only beforeSwap permission, address flag 1<<7).
+/// @dev Implements IHooks directly (beforeSwap + afterSwap; address flags 0xC0).
 ///      Pool config is one-time-write by the deployer: feed can never be swapped
 ///      after configuration, so there is no admin path to weaken a live pool.
 contract SlipNope is IHooks {
@@ -70,6 +70,7 @@ contract SlipNope is IHooks {
     error InvalidReference();
     error StaleReference(uint256 updatedAt, uint256 maxStale);
     error OverpayBlocked(uint256 adverseBps, uint24 bandBps, uint256 poolPriceE18, uint256 fairPriceE18);
+    error PostSwapOutOfBand(uint256 adverseBps, uint24 bandBps, uint256 poolPriceE18, uint256 fairPriceE18);
 
     constructor(IPoolManager manager_, address owner_) {
         poolManager = manager_;
@@ -290,12 +291,27 @@ contract SlipNope is IHooks {
         return (IHooks.afterRemoveLiquidity.selector, toBalanceDelta(0, 0));
     }
 
-    function afterSwap(address, PoolKey calldata, IPoolManager.SwapParams calldata, BalanceDelta, bytes calldata)
-        external
-        pure
-        override
-        returns (bytes4, int128)
-    {
+    /// @notice Post-swap guard: a single swap may not leave the pool more than
+    ///         `band` away from fair. Without this, one large trade could dislocate
+    ///         a thin book (the pre-swap check cannot see the resulting price).
+    ///         Reverting here unwinds the whole swap, so nothing settles.
+    function afterSwap(
+        address,
+        PoolKey calldata key,
+        IPoolManager.SwapParams calldata params,
+        BalanceDelta,
+        bytes calldata hookData
+    ) external override returns (bytes4, int128) {
+        if (msg.sender != address(poolManager)) revert NotPoolManager();
+        PoolGuard memory g = guards[key.toId()];
+        if (!g.configured) return (IHooks.afterSwap.selector, 0);
+
+        (uint160 sqrtPriceX96,,,) = poolManager.getSlot0(key.toId());
+        uint256 postPrice = _poolPriceE18(key, g, sqrtPriceX96);
+        uint256 fair = _fairPriceE18(g);
+        uint256 adverse = _adverseBps(key, g, params.zeroForOne, postPrice, fair);
+        uint24 band = DEFAULT_BAND_BPS;
+        if (adverse > band) revert PostSwapOutOfBand(adverse, band, postPrice, fair);
         return (IHooks.afterSwap.selector, 0);
     }
 

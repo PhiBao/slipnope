@@ -19,6 +19,7 @@ For every swap in a guarded pool the hook computes the direction-aware adverse d
 | **OK** | adverse ≤ band/2 | swap executes, 0.05% LP fee |
 | **WARN** | adverse ≤ band | swap executes, fee scales with deviation (cap 1%) |
 | **BLOCK** | adverse > band | **swap reverts** (`OverpayBlocked`) — it cannot execute |
+| **POST-SWAP** | a single swap would leave the pool > band from fair | **swap reverts** (`PostSwapOutOfBand`) — one trade cannot dislocate the book |
 | **FAIL-CLOSED** | stale / invalid reference | **swap reverts** — the guard never guesses |
 
 Universal band: ±3.00%.
@@ -42,6 +43,7 @@ Coinbase tokenized stocks (B20, 298 listed) + Chainlink 24/5 total-return feeds 
 Fair-price protection used to require trusting an app to warn you before you signed elsewhere. SlipNope moves the check **inside execution**:
 
 - `beforeSwap` reads Chainlink, computes adverse deviation from the live pool sqrt price, and the swap either executes in-band at a fair fee, pays a deviation-scaled WARN fee, or **cannot execute at all**.
+- `afterSwap` re-checks the resulting price: if one swap would leave the book beyond the band, the whole swap reverts. A thin pool cannot be walked to an extreme, and a stranded price cannot be created in a single transaction.
 - Staleness follows equity reality: stock feeds are 24/5 (24-hour heartbeat, freeze off-hours and during corporate actions). A frozen/stale feed fails closed — exactly the behavior Base's own integration guidance demands.
 - One-time pool configuration: after `configurePool`, the feed for a pool can never be changed. There is no admin path that can weaken a live guarded pool.
 
@@ -80,7 +82,12 @@ services/api/ (Rust, Axum)
 
 **Verified mainnet (8453):** PoolManager `0x498581fF718922c3f8e6A244956aF099B2652b2b` · NVDAc `0xb20000000000000000000078ee7ce2fE4908108C` (8dp) / feed `0x04689a41629776563E6822F76f2e57D148d28513` ($179.49 at fork time) · AAPLc feed `0x787f13dEa48Db0897CbCDD985de77809D837F988` · TSLAc feed `0xFaf869185383a24F8cb00e27BdA6b63B9905DCb4` · USDC `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913` (6dp).
 
-**Production mainnet (8453):** SlipNope `0xe370154e9f41c5c7c9abd62154680fae0449c080` (flags `0x80`) · Router `0x645174D655814839a85Bd80D2F54b35A7160465E` · VanityFactory `0x333bD2996F0098f2Ec5fd56D5E3f70F05C116D85` · guarded NVDAc/USDC pool (tickSpacing 10, Chainlink feed `0x0468…8513`), seeded at fair (pool == fair to the wei), `GuardAllowed` OK-swap verified (tx `0xe6f306e4…7e17`). One mis-initialized tickSpacing-60 pool exists with no liquidity and no funds (superseded by the spacing-10 pool).
+**Production mainnet (8453):** SlipNope `0xee7344d34b3ec4f2ad24a668bc0d84e55de640c0` (flags `0xC0` = beforeSwap + **afterSwap**) · Router `0x1FBd69cf077E3eCcB9C3D4d85A87304611501ad7` · VanityFactory `0x333bD2996F0098f2Ec5fd56D5E3f70F05C116D85` · guarded NVDAc/USDC pool (tickSpacing 10, live Chainlink feed `0x0468…8513`), initialised and seeded at fair.
+
+**Mainnet proofs (all on BaseScan):**
+- Guarded **OK** swap: tx `0x53955f5fce1a2d4faac25fb994169316351ed31de7530d9a1313bdb5a2226a49` — 1 USDC → 0.00558 NVDAc, `GuardAllowed` adverse 0 bps, fee 500.
+- Guarded **BLOCK**: tx `0x8c29ed1f57f08e10ee2fb87506a2617c731a187bf905eef8558294442e2cd2f2` — **status 0 (reverted)** on a 10 USDC buy that would have left the book 628 bps above fair: `PostSwapOutOfBand(628, 300)`. The swap could not settle.
+- **LP escape**: burn the position → principal returns, verified on mainnet (tx `0xb59c2ce1bc5cc809dd8e60ca07b138cddafd66437506ca0b8da15c028a216151`) and on Sepolia to the wei (tx `0xc18b889b…fb6fee`).
 
 **Verified Sepolia (84532, self-deployed stack):** PoolManager `0x7d5C9F16EfE4343b65C8dbbD8733131f240DFDeD` · SlipNope `0xcc1cb596c75aed51ffeb52dca2887b6606128080` (flags `0x80`) · Router `0xC3c3Ae1957e3D679332203f488F21bd3Ea85867f` · MockStock NVDAc-like `0x59A0624569E29c8721AC5365821d0da163d1B38f` (8dp) · Mock USDC `0xBcE84A6C7bEC94BFd5B71Cb6014090b073A94b82` (6dp) · MockFeed `0x94bF2d7Df98f7b6237a45ff9963Ff1783FB6A2d1` ($179.49). Escape verified: full liquidity burn returns 100% of seeded principal to the wei (tx `0xc18b889b…fb6fee`).
 
@@ -125,7 +132,7 @@ cargo run --release  # :8787 — /health /board /ledger /stats
 
 **Verified live (Nov 9 2026):**
 
-- 7 unit tests pass (OK/WARN/BLOCK tiers, stale fail-closed, frozen-feed fail-closed, router enforcement) — `contracts/test/SlipNope.t.sol`.
+- 9 unit tests pass (OK/WARN/BLOCK tiers, post-swap out-of-band revert, stale fail-closed, frozen-feed fail-closed, router enforcement) — `contracts/test/SlipNope.t.sol`.
 - 3 mainnet-fork tests pass against **live Base state**: real Chainlink NVDAc feed reads through the hook ($179.49), pool initialized at fair shows 0 adverse, config is one-time-write — `contracts/test/fork/SlipNopeFork.t.sol`.
 - **Sepolia end-to-end deployment verified on BaseScan**: PoolManager, SlipNope hook (flags `0x80`), router, mock 8dp stock + 6dp USDC + $179.49 mock fair, seeded guarded pool. `previewGuard` shows adverse 0 / fee 500 / not blocked at fair. **Guarded swap executed** (GuardAllowed with adverse 0, band 300, fee 500; tx `0xa45d…336e6`). **BLOCK proven on-chain**: mock fair dropped to ~$89.75 → preview shows adverse 9,998 bps blocked → swap reverts with `OverpayBlocked(0x575e24b4)`. Feed restored to $179.49 after.
 

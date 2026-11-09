@@ -39,7 +39,7 @@ contract SlipNopeForkTest is Test {
         if (block.chainid != 8453) return;
         IPoolManager manager = IPoolManager(MANAGER);
 
-        uint160 flags = uint160(Hooks.BEFORE_SWAP_FLAG);
+        uint160 flags = uint160(Hooks.BEFORE_SWAP_FLAG | Hooks.AFTER_SWAP_FLAG);
         bytes memory bytecode = abi.encodePacked(type(SlipNope).creationCode, abi.encode(manager, address(this)));
         bytes32 salt;
         address hookAddr;
