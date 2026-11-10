@@ -240,6 +240,7 @@ async fn get_tape(State(state): State<Arc<AppState>>) -> Json<serde_json::Value>
 /// Rebuilds the tape snapshot; the only writer of `tape_cache`.
 async fn refresh_tape(state: Arc<AppState>) -> serde_json::Value {
     let rows = tape::build(&state).await;
+    let all_failed = rows.iter().all(|r| r.fair_usd.is_none());
     let dislocated = rows.iter().filter(|r| r.would_block).count();
     let value = serde_json::json!({
         "generatedAt": now_secs(),
@@ -252,7 +253,14 @@ async fn refresh_tape(state: Arc<AppState>) -> serde_json::Value {
             "market": "Cambrian API, Uniswap v3 derived USD price on Base",
         },
     });
-    *state.tape_cache.write().await = Some((now_secs(), value.clone()));
+    // Cold-start resilience: a scale-to-zero machine must not answer "warming"
+    // to the first visitor. Persist the last good snapshot and reload it on boot.
+    if !all_failed {
+        if let Ok(json) = serde_json::to_string(&value) {
+            let _ = tokio::fs::write("/tmp/tape.json", json).await;
+        }
+        *state.tape_cache.write().await = Some((now_secs(), value.clone()));
+    }
     value
 }
 
@@ -522,6 +530,16 @@ async fn main() {
     }
     println!("slipnope-api: loaded {} ledger entries from {ledger_file}", entries.len());
 
+    // Restore the previous tape snapshot so a cold start is never empty.
+    let restored: Option<(u64, serde_json::Value)> = match tokio::fs::read_to_string("/tmp/tape.json").await {
+        Ok(body) => serde_json::from_str::<serde_json::Value>(&body)
+            .ok()
+            .map(|v| (v["generatedAt"].as_u64().unwrap_or(0), v)),
+        Err(_) => None,
+    };
+    let restored_at = restored.as_ref().map(|(a, _)| *a);
+    println!("tape snapshot restored: {:?}", restored_at);
+
     let state = Arc::new(AppState {
         rpc,
         http: reqwest::Client::new(),
@@ -529,7 +547,7 @@ async fn main() {
         ledger_file,
         cambrian: cambrian::Cambrian::new(cambrian_key),
         jev: jev::Jev::new(typesafe_key),
-        tape_cache: Arc::new(RwLock::new(None)),
+        tape_cache: Arc::new(RwLock::new(restored)),
         proof_cache: Arc::new(RwLock::new(None)),
     });
 
