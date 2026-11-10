@@ -19,6 +19,8 @@ export interface StockInfo {
   name: string;
   token: Address;
   feed: Address;
+  /** Guarded pool tick spacing for this stock (each live pool has its own). */
+  tickSpacing?: number;
 }
 
 // Coinbase tokenized stocks (B20) + Chainlink feeds — verified onchain 2026-11-09.
@@ -28,18 +30,21 @@ export const STOCKS: StockInfo[] = [
     name: "NVIDIA",
     token: "0xb20000000000000000000078ee7ce2fE4908108C",
     feed: "0x04689a41629776563E6822F76f2e57D148d28513",
+    tickSpacing: 10,
   },
   {
     symbol: "AAPLc",
     name: "Apple",
     token: "0xb200000000000000000000C2e324d24d7eEcd1fb",
     feed: "0x787f13dEa48Db0897CbCDD985de77809D837F988",
+    tickSpacing: 40,
   },
   {
     symbol: "TSLAc",
     name: "Tesla",
     token: "0xb2000000000000000000001e800a7f5189430cD0",
     feed: "0xFaf869185383a24F8cb00e27BdA6b63B9905DCb4",
+    tickSpacing: 60,
   },
 ];
 
@@ -170,15 +175,21 @@ export type PoolKeyTuple = {
 };
 
 /** NVDAc/USDC guarded pool key (USDC 0x8335.. sorts before NVDAc 0xb200..). */
-export function nvdaPoolKey(): PoolKeyTuple | null {
-  if (!SLIPNOPE) return null;
+export function poolKeyFor(symbol: string): PoolKeyTuple | null {
+  const stock = STOCKS.find((s) => s.symbol === symbol) ?? STOCKS[0];
+  if (!SLIPNOPE || stock.tickSpacing === undefined) return null;
   return {
     currency0: USDC,
-    currency1: STOCKS[0].token,
+    currency1: stock.token,
     fee: DYNAMIC_FEE_FLAG,
-    tickSpacing: 10,
+    tickSpacing: stock.tickSpacing,
     hooks: SLIPNOPE as Address,
   };
+}
+
+/** Back-compat helper for the NVDAc pool. */
+export function nvdaPoolKey(): PoolKeyTuple | null {
+  return poolKeyFor("NVDAc");
 }
 
 /** Integer sqrt for bigint. */

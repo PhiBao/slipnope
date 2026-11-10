@@ -216,14 +216,18 @@ contract SlipNopeV3 is IHooks {
         return FullMath.mulDiv(value, 1, divisor * (10 ** uint256(-exp)));
     }
 
+    /// @dev True when this swap pays quote and receives stock.
+    function _isBuy(PoolKey calldata key, PoolGuard memory g, bool zeroForOne) internal pure returns (bool) {
+        bool stockIs0 = g.stock == Currency.unwrap(key.currency0);
+        return stockIs0 ? !zeroForOne : zeroForOne;
+    }
+
     function _adverseBps(PoolKey calldata key, PoolGuard memory g, bool zeroForOne, uint256 poolPrice, uint256 fair)
         internal
         pure
         returns (uint256)
     {
-        bool stockIs0 = g.stock == Currency.unwrap(key.currency0);
-        // buying stock: paying quote, receiving stock
-        bool buyingStock = stockIs0 ? !zeroForOne : zeroForOne;
+        bool buyingStock = _isBuy(key, g, zeroForOne);
         if (buyingStock) {
             return poolPrice > fair ? ((poolPrice - fair) * 10_000) / fair : 0;
         } else {
@@ -303,17 +307,19 @@ contract SlipNopeV3 is IHooks {
         return (IHooks.afterRemoveLiquidity.selector, toBalanceDelta(0, 0));
     }
 
-    /// @notice Post-swap guard: a single swap may not leave the pool more than
-    ///         `band` away from fair — in **either** direction. The pre-swap
-    ///         check only refuses overpaying; without this, one oversized buy
-    ///         could crash a thin book far below fair, which is just as broken
-    ///         for everyone else in the pool. Reverting here unwinds the swap.
+    /// @notice Post-swap guard: a swap may not leave the book more than `band`
+    ///         away from fair in the adverse direction, nor more than twice the
+    ///         band in the favourable direction. The pre-swap check only refuses
+    ///         overpaying; without this, one oversized buy could crash a thin
+    ///         book far below fair, which is just as broken for LPs. The wider
+    ///         favourable allowance keeps normal flow working — a trade that
+    ///         *improves* the price is never punished until it overshoots badly.
     function afterSwap(
         address,
         PoolKey calldata key,
-        IPoolManager.SwapParams calldata,
+        IPoolManager.SwapParams calldata params,
         BalanceDelta,
-        bytes calldata hookData
+        bytes calldata
     ) external override returns (bytes4, int128) {
         if (msg.sender != address(poolManager)) revert NotPoolManager();
         PoolGuard memory g = guards[key.toId()];
@@ -322,9 +328,15 @@ contract SlipNopeV3 is IHooks {
         (uint160 sqrtPriceX96,,,) = poolManager.getSlot0(key.toId());
         uint256 postPrice = _poolPriceE18(key, g, sqrtPriceX96);
         uint256 fair = _fairPriceE18(g);
-        uint256 deviation = postPrice > fair ? ((postPrice - fair) * 10_000) / fair : ((fair - postPrice) * 10_000) / fair;
         uint24 band = _bandFor(address(0));
-        if (deviation > band) revert PostSwapOutOfBand(deviation, band, postPrice, fair);
+
+        bool buying = _isBuy(key, g, params.zeroForOne);
+        bool adverse = buying ? postPrice > fair : fair > postPrice;
+        uint256 deviation = fair == 0
+            ? type(uint256).max
+            : (postPrice > fair ? ((postPrice - fair) * 10_000) / fair : ((fair - postPrice) * 10_000) / fair);
+        uint256 limit = adverse ? uint256(band) : uint256(band) * 2;
+        if (deviation > limit) revert PostSwapOutOfBand(deviation, band, postPrice, fair);
         return (IHooks.afterSwap.selector, 0);
     }
 

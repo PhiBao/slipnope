@@ -17,7 +17,7 @@ import {
   hookAbi,
   routerAbi,
   erc20Abi,
-  nvdaPoolKey,
+  poolKeyFor,
   fairSqrtLimits,
   fmtUsd,
   EXPLORER,
@@ -30,12 +30,14 @@ type Side = "buy" | "sell";
 export default function GuardCard({ onLedgerChange }: { onLedgerChange: () => void }) {
   const { address, isConnected } = useAccount();
   const [side, setSide] = useState<Side>("buy");
+  const [symbol, setSymbol] = useState("NVDAc");
+  const activeStock = STOCKS.find((s) => s.symbol === symbol) ?? STOCKS[0];
   const [amount, setAmount] = useState("25");
   const [stampKey, setStampKey] = useState(0);
   const [lastTx, setLastTx] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const poolKey = nvdaPoolKey();
+  const poolKey = poolKeyFor(symbol);
   const deployed = Boolean(SLIPNOPE && ROUTER && poolKey);
   const zeroForOne = side === "buy"; // currency0 = USDC: buy NVDAc pays USDC (0 -> 1)
 
@@ -53,9 +55,9 @@ export default function GuardCard({ onLedgerChange }: { onLedgerChange: () => vo
     contracts: address
       ? [
           { address: USDC, abi: erc20Abi, functionName: "balanceOf" as const, args: [address] },
-          { address: STOCKS[0].token, abi: erc20Abi, functionName: "balanceOf" as const, args: [address] },
+          { address: activeStock.token, abi: erc20Abi, functionName: "balanceOf" as const, args: [address] },
           {
-            address: side === "buy" ? USDC : STOCKS[0].token,
+            address: side === "buy" ? USDC : activeStock.token,
             abi: erc20Abi,
             functionName: "allowance" as const,
             args: [address, (ROUTER || "0x0000000000000000000000000000000000000000") as Address],
@@ -110,7 +112,7 @@ export default function GuardCard({ onLedgerChange }: { onLedgerChange: () => vo
     if (verdict === "BLOCK" && adverseBps !== null && poolPrice && fairPrice) {
       recordEntry({
         wallet: address,
-        symbol: "NVDAc",
+        symbol,
         side,
         amountUsd: notionalUsd,
         poolPrice,
@@ -127,7 +129,7 @@ export default function GuardCard({ onLedgerChange }: { onLedgerChange: () => vo
 
     setBusy(true);
     try {
-      const inToken = side === "buy" ? USDC : STOCKS[0].token;
+      const inToken = side === "buy" ? USDC : activeStock.token;
       if (allowance < amountIn) {
         const ah = await writeContractAsync({
           address: inToken,
@@ -153,7 +155,7 @@ export default function GuardCard({ onLedgerChange }: { onLedgerChange: () => vo
       if (adverseBps !== null && poolPrice && fairPrice) {
         recordEntry({
           wallet: address,
-          symbol: "NVDAc",
+          symbol,
           side,
           amountUsd: notionalUsd,
           poolPrice,
@@ -175,7 +177,7 @@ export default function GuardCard({ onLedgerChange }: { onLedgerChange: () => vo
         if (adverseBps !== null && poolPrice && fairPrice) {
           recordEntry({
             wallet: address,
-            symbol: "NVDAc",
+            symbol,
             side,
             amountUsd: notionalUsd,
             poolPrice,
@@ -212,7 +214,7 @@ export default function GuardCard({ onLedgerChange }: { onLedgerChange: () => vo
               The guard <span className="text-[var(--color-amber)]">is the pool.</span>
             </h2>
             <p className="mt-2 text-sm text-[var(--color-faded)] max-w-xl leading-relaxed">
-              Every swap in the SlipNope NVDAc/USDC pool is checked against Chainlink fair value{" "}
+              Every swap in a SlipNope pool is checked against Chainlink fair value{" "}
               <em className="not-italic text-[var(--color-cream)]">inside the transaction</em>. Outside your band, the
               swap cannot execute — no warning to ignore, no app to close.
             </p>
@@ -227,6 +229,26 @@ export default function GuardCard({ onLedgerChange }: { onLedgerChange: () => vo
           )}
         </div>
 
+        {/* market selector */}
+        <div className="mt-5 flex gap-2 flex-wrap">
+          {STOCKS.map((s) => (
+            <button
+              key={s.symbol}
+              onClick={() => setSymbol(s.symbol)}
+              className={`px-3 py-1.5 num text-xs border transition-colors ${
+                symbol === s.symbol
+                  ? "border-[var(--color-amber)] text-[var(--color-amber)]"
+                  : "border-[var(--color-line)] text-[var(--color-faded)] hover:border-[var(--color-amber-dim)]"
+              }`}
+            >
+              {s.symbol}
+            </button>
+          ))}
+          <span className="num text-[10px] text-[var(--color-faded)] self-center">
+            three guarded pools · same guard
+          </span>
+        </div>
+
         {/* side + amount */}
         <div className="mt-6 grid sm:grid-cols-[auto_1fr_auto] gap-3 items-stretch">
           <div className="flex border border-[var(--color-line)]">
@@ -238,7 +260,7 @@ export default function GuardCard({ onLedgerChange }: { onLedgerChange: () => vo
                   side === s ? "bg-[var(--color-amber)] text-black" : "text-[var(--color-faded)] hover:text-[var(--color-cream)]"
                 }`}
               >
-                {s} NVDAc
+                {s} {symbol.replace("c", "")}
               </button>
             ))}
           </div>
@@ -248,9 +270,9 @@ export default function GuardCard({ onLedgerChange }: { onLedgerChange: () => vo
               onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ""))}
               inputMode="decimal"
               className="num w-full bg-transparent py-3 text-2xl font-semibold outline-none"
-              aria-label={side === "buy" ? "Amount in USDC" : "Amount in NVDAc"}
+              aria-label={side === "buy" ? "Amount in USDC" : `Amount in ${symbol}`}
             />
-            <span className="num text-sm text-[var(--color-faded)]">{side === "buy" ? "USDC" : "NVDAc"}</span>
+            <span className="num text-sm text-[var(--color-faded)]">{side === "buy" ? "USDC" : symbol}</span>
           </label>
           <button
             onClick={handleAction}
@@ -263,7 +285,7 @@ export default function GuardCard({ onLedgerChange }: { onLedgerChange: () => vo
 
         <div className="num mt-2 text-[11px] text-[var(--color-faded)] flex gap-4 flex-wrap">
           <span>
-            Balance: {formatUnits(usdcBal, 6)} USDC · {Number(formatUnits(nvdaBal, 8)).toFixed(4)} NVDAc
+            Balance: {formatUnits(usdcBal, 6)} USDC · {Number(formatUnits(nvdaBal, 8)).toFixed(5)} {symbol}
           </span>
           {fee !== null && <span>LP fee this swap: {(fee / 10000).toFixed(2)}%</span>}
           <span>Guard band: ±{(bandBps / 100).toFixed(2)}%</span>
