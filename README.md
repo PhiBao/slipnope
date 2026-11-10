@@ -47,6 +47,12 @@ Fair-price protection used to require trusting an app to warn you before you sig
 - Staleness follows equity reality: stock feeds are 24/5 (24-hour heartbeat, freeze off-hours and during corporate actions). A frozen/stale feed fails closed — exactly the behavior Base's own integration guidance demands.
 - One-time pool configuration: after `configurePool`, the feed for a pool can never be changed. There is no admin path that can weaken a live guarded pool.
 
+**The Dislocation Tape** turns the thesis into a measurable market fact. Every tracked Coinbase stock on Base is priced two ways — Chainlink fair (the number the hook enforces) and the market quote (Cambrian, Uniswap v3 on Base) — and the gap is published as a live premium with a "would SlipNope block this?" verdict. First sweep: 2 of 10 tokens dislocated (TSLAc +688 bps, MSTRc +1183 bps).
+
+**A public verdict endpoint** (`GET /guard/:symbol`) reports the hook's own onchain answer — read from `previewGuard`, the same function the UI renders before signing — plus market context. Anyone can build on it without reading our contracts.
+
+**An advisory layer that can never decide.** TypeSafe Jev scores the *context* around a verdict (execution quality, regime: normal / thin book / frozen reference / dislocated). It is labelled advisory, cached, and degrades to nothing; the swap decision is deterministic Solidity.
+
 ## 2. User experience
 
 1. **Board (no wallet needed):** three numbers per stock — market (guarded pool), fair (Chainlink), premium — live.
@@ -72,10 +78,20 @@ src/ (Next.js 15 + wagmi/viem, TypeScript)
   lib/ledger.ts                 Overpay Ledger (localStorage + API mirror)
 
 services/api/ (Rust, Axum)
-  GET /board                    independent Chainlink read via raw eth_call
+  GET /tape                     the Dislocation Tape (10 stocks, fair vs market)
+  GET /guard/:symbol            onchain verdict + market context + advisory
+  GET /proof                    GuardAllowed log scan (guarded swaps, wallets)
+  GET /board                    Chainlink fair prices only
   POST /ledger, GET /ledger/:wallet, GET /stats, GET /health
-  Ledger persists as append-only JSONL audit file.
+  cambrian.rs  market data client (quota-disciplined, background snapshot)
+  jev.rs       TypeSafe advisory (typed judgments, degradable)
+  proof.rs     chunked eth_getLogs over the hook's lifetime
+  guard_abi.rs hand-rolled PoolKey calldata (no ABI codec dependency)
   Live at https://slipnope-api.fly.dev
+
+contracts/src/BandRegistry.sol   adaptive band source, keeper-moved, hard-bounded
+contracts/src/SlipNopeV3.sol     same guard, band read from the registry
+scripts/keeper.mjs               vol -> band keeper (Cambrian history -> setBand)
 ```
 
 **Backend language note:** offchain services are Rust. Onchain hook/router are Solidity because Uniswap v4 hooks are EVM contracts — the exception is isolated to `contracts/` and justified by the protocol itself.
@@ -141,6 +157,12 @@ cargo run --release  # :8787 — /health /board /ledger /stats
 - https://slipnope.vercel.app — board reads live Chainlink feeds on Base mainnet every 20s (GuardCard pending until mainnet hook deploy).
 - https://slipnope-api.fly.dev — `/health` chainId 8453, `/board` serves NVDAc/AAPLc/TSLAc Chainlink fairs.
 
+**Adaptive band, verified end-to-end on Base Sepolia (84532):**
+- `BandRegistry` `0x79Db7Ea8848FBCFD37C1C9279BCF5106f5AeB2ec` (bounds 100–800 bps)
+- `SlipNopeV3` `0x1ff63e299b4c8c79e6d91a2811eefcda497100c0` (flags `0xC0`), seeded pool
+- Keeper run: 168h of hourly NVDAc prices → 1h stdev 61.5 bps → `setBand(154, "vol1h=61.5bps k=2.5")` → hook `previewGuard` immediately reports a 154 bps band (tx `0xfdf38040…d51d800c`)
+- Unit tests cover tightening, bounds enforcement, keeper-only access, and a reverting registry falling back to the immutable default
+
 **Honest limits:**
 
 - Sepolia uses mock B20 + mock Chainlink (testnet has no B20 precompiles, and foundry's fork EVM can't emulate them — verified via direct RPC reads instead).
@@ -158,7 +180,7 @@ cargo run --release  # :8787 — /health /board /ledger /stats
 
 ## 8. Hackathon relevance
 
-- **Track:** Programmable Stock Markets — a net-new market primitive (a fair-price execution guard = market infrastructure).
+- **Track:** Programmable Stock Markets — a net-new market primitive: a fair-price execution guard, a market-wide dislocation index, and an open verdict API other venues can consume.
 - **Built on / meaningfully integrated with Base:** Uniswap v4 hooks on Base mainnet + Chainlink tokenized-equity feeds + B20 stocks. Existing Solana-era FairBuy logic ported and extended on Base during the season.
 - **No token launch:** the product is the guard; a token is optional and we don't need one.
 - **Amount of code built during the season:** Base port of the hook (new chain targets, feed set, trillion-step test upgrades), Sepolia v4 core deployment, CREATE2 vanity factory, frontend + API redeploys, fork tests against live Base state.
