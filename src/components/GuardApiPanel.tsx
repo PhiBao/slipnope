@@ -30,11 +30,11 @@ const REGIME_COPY: Record<string, string> = {
   dislocated: "market dislocated",
 };
 
-export default function GuardApiPanel() {
+export default function GuardApiPanel({ symbol = "NVDAc" }: { symbol?: string }) {
   const { data } = useQuery<GuardApi>({
-    queryKey: ["guard", "nvdac"],
+    queryKey: ["guard", symbol.toLowerCase()],
     queryFn: async () => {
-      const res = await fetch(`${API_URL || ""}/guard/nvdac`);
+      const res = await fetch(`${API_URL || ""}/guard/${encodeURIComponent(symbol)}`);
       if (!res.ok) throw new Error(`guard ${res.status}`);
       return res.json();
     },
@@ -53,7 +53,7 @@ export default function GuardApiPanel() {
     <div className="mt-5 border border-[var(--color-line)] bg-[var(--color-ink)]">
       <div className="flex items-center justify-between gap-3 px-3 py-2 border-b border-[var(--color-line)]">
         <span className="num text-[9px] tracking-[0.2em] uppercase text-[var(--color-faded)]">
-          Verdict · read from the hook onchain
+          {symbol} verdict · read from the hook onchain
         </span>
         <span className={`num text-[10px] font-bold px-1.5 py-0.5 border ${VERDICT_STYLE[data.verdict] ?? "text-[var(--color-faded)] border-[var(--color-line)]"}`}>
           {data.verdict}

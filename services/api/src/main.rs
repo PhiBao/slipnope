@@ -351,15 +351,16 @@ async fn get_guard(
         .find(|s| s.symbol.eq_ignore_ascii_case(&symbol))
         .ok_or(StatusCode::NOT_FOUND)?;
 
-    let guarded = stock.token.eq_ignore_ascii_case(guard_abi::GUARDED_STOCK);
+    let guarded_pool = guard_abi::pool_for_stock(stock.token);
+    let guarded = guarded_pool.is_some();
 
     // Onchain truth, straight from the hook's own view.
-    let onchain = if guarded {
+    let onchain = if let Some(pool) = guarded_pool {
         let zero = "0x0000000000000000000000000000000000000000";
         let buy = state
             .eth_call(
                 guard_abi::GUARDED_POOL_HOOK,
-                &guard_abi::preview_guard_calldata(true, zero),
+                &guard_abi::preview_guard_calldata(pool, true, zero),
             )
             .await
             .ok()
@@ -367,7 +368,7 @@ async fn get_guard(
         let sell = state
             .eth_call(
                 guard_abi::GUARDED_POOL_HOOK,
-                &guard_abi::preview_guard_calldata(false, zero),
+                &guard_abi::preview_guard_calldata(pool, false, zero),
             )
             .await
             .ok()

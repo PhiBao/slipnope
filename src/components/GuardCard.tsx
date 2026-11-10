@@ -92,6 +92,7 @@ export default function GuardCard({ onLedgerChange }: { onLedgerChange: () => vo
   const poolPrice = preview ? Number(preview[4]) / 1e18 : null;
   const fairPrice = preview ? Number(preview[5]) / 1e18 : null;
   const fairE18 = preview ? preview[5] : 0n;
+  const notionalUsd = side === "buy" ? amountNum : fairPrice ? amountNum * fairPrice : 0;
 
   const verdict: "OK" | "WARN" | "BLOCK" | null = !preview
     ? null
@@ -137,12 +138,19 @@ export default function GuardCard({ onLedgerChange }: { onLedgerChange: () => vo
   }, [amountIn, fairE18, zeroForOne]);
   const quotedOut = quote?.result;
   const fillPct = quotedOut !== undefined && fairOut > 0n ? Number((quotedOut * 10_000n) / fairOut) / 100 : null;
+  // USD value of what the swap would actually deliver at fair, which is a good
+  // estimate of the part of the order the pool can absorb inside the band.
+  const filledUsd =
+    quotedOut !== undefined && fairPrice
+      ? side === "buy"
+        ? (Number(quotedOut) / 1e8) * fairPrice
+        : Number(quotedOut) / 1e6
+      : null;
+  const capped = fillPct !== null && fillPct < 95;
+  const refundUsd = filledUsd !== null ? Math.max(0, notionalUsd - filledUsd) : null;
   const quoteMessage = quoteError
     ? ((quoteError as { shortMessage?: string }).shortMessage ?? quoteError.message).slice(0, 140)
     : null;
-
-  const notionalUsd =
-    side === "buy" ? amountNum : fairPrice ? amountNum * fairPrice : 0;
 
   const { writeContractAsync } = useWriteContract();
   const [pendingHash, setPendingHash] = useState<`0x${string}` | undefined>();
@@ -351,6 +359,51 @@ export default function GuardCard({ onLedgerChange }: { onLedgerChange: () => vo
           </span>
         </div>
 
+        {isConnected && amountIn > 0n && allowance >= amountIn && verdict !== "BLOCK" && (
+          <>
+            {capped && filledUsd !== null && refundUsd !== null ? (
+              <div className="mt-3 border border-[var(--color-amber-dim)] bg-[var(--color-ink)] px-3 py-2.5">
+                <div className="flex items-start justify-between gap-3 flex-wrap">
+                  <p className="num max-w-xl text-[11px] leading-relaxed text-[var(--color-faded)]">
+                    <span className="font-bold text-[var(--color-amber)]">Pool cap.</span>{" "}
+                    {`About $${fmtUsd(filledUsd)} of your $${fmtUsd(notionalUsd)} order fills inside the ±${(
+                      bandBps / 100
+                    ).toFixed(2)}% band. The router refunds about $${fmtUsd(refundUsd)} in the same transaction.`}
+                  </p>
+                  <details className="num text-[10px] text-[var(--color-faded)]">
+                    <summary className="cursor-pointer font-bold uppercase tracking-wider text-[var(--color-amber)]">
+                      Why?
+                    </summary>
+                    <p className="mt-2 max-w-xs leading-relaxed">
+                      SlipNope stops the swap when the pool would move more than ±
+                      {(bandBps / 100).toFixed(2)}% from Chainlink fair. This pool is thin, so that price is
+                      reached before the whole order fills. The unspent amount goes back to your wallet with
+                      the swap, not to the app or the pool.
+                    </p>
+                  </details>
+                </div>
+                {quotedOut !== undefined && (
+                  <p className="num mt-1 text-[10px] text-[var(--color-faded)]">
+                    Quoted out: {formatUnits(quotedOut, zeroForOne ? 8 : 6)} {zeroForOne ? symbol : "USDC"} ·{" "}
+                    {fillPct !== null ? fillPct.toFixed(0) : "?"}% of a fair fill
+                  </p>
+                )}
+              </div>
+            ) : quotedOut !== undefined ? (
+              <p className="num mt-2 text-[11px] text-[var(--color-faded)]">
+                Quoted out:{" "}
+                <span className="text-[var(--color-cream)]">
+                  {formatUnits(quotedOut, zeroForOne ? 8 : 6)} {zeroForOne ? symbol : "USDC"}
+                </span>
+              </p>
+            ) : quoteFetching ? (
+              <p className="num mt-2 text-[11px] text-[var(--color-faded)]">Quoting this swap…</p>
+            ) : quoteMessage ? (
+              <p className="num mt-2 text-[11px] text-[var(--color-bad)]">Quote unavailable: {quoteMessage}</p>
+            ) : null}
+          </>
+        )}
+
         {/* verdict detail */}
         {deployed && preview && poolPrice && fairPrice && adverseBps !== null && (
           <div className="mt-5 grid grid-cols-3 gap-px bg-[var(--color-line)] border border-[var(--color-line)] num">
@@ -376,32 +429,9 @@ export default function GuardCard({ onLedgerChange }: { onLedgerChange: () => vo
           </div>
         )}
 
-        {isConnected && amountIn > 0n && allowance >= amountIn && verdict !== "BLOCK" && (
-          <div className="num mt-3 text-[11px] leading-relaxed text-[var(--color-faded)]">
-            {quotedOut !== undefined ? (
-              <>
-                Quoted out:{" "}
-                <span className="text-[var(--color-cream)]">
-                  {formatUnits(quotedOut, zeroForOne ? 8 : 6)} {zeroForOne ? symbol : "USDC"}
-                </span>
-                {fillPct !== null && fillPct < 95 && (
-                  <span className="text-[var(--color-amber)]">
-                    {" "}
-                    · the band caps this trade at about {fillPct.toFixed(0)}% of a fair fill; the rest is refunded
-                  </span>
-                )}
-              </>
-            ) : quoteFetching ? (
-              "Quoting this swap…"
-            ) : quoteMessage ? (
-              <span className="text-[var(--color-bad)]">Quote unavailable: {quoteMessage}</span>
-            ) : null}
-          </div>
-        )}
-
         <ChainNotice what="Guarded swaps" />
 
-        {deployed && <GuardApiPanel />}
+        {deployed && <GuardApiPanel symbol={symbol} />}
 
         {deployed && previewLoading && !preview && (
           <p className="num mt-5 text-xs text-[var(--color-faded)]">Reading pool + Chainlink…</p>
