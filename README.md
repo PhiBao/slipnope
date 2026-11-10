@@ -111,17 +111,17 @@ scripts/keeper.mjs               vol -> band keeper (Cambrian history -> setBand
 
 **Verified mainnet (8453):** PoolManager `0x498581fF718922c3f8e6A244956aF099B2652b2b` · NVDAc `0xb20000000000000000000078ee7ce2fE4908108C` (8dp) / feed `0x04689a41629776563E6822F76f2e57D148d28513` ($179.49 at fork time) · AAPLc feed `0x787f13dEa48Db0897CbCDD985de77809D837F988` · TSLAc feed `0xFaf869185383a24F8cb00e27BdA6b63B9905DCb4` · USDC `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913` (6dp).
 
-**Source verification (Sourcify, exact match):** the hook, router, FairLimit queue and factory are byte-for-byte verified on Base mainnet, as are the v3 hook, band registry and queue on Base Sepolia. Sourcify records the compiler settings used (solc 0.8.26, optimizer 200, viaIR, cancun) and forwards each verification to Blockscout. BaseScan's own verifier refused the submissions because its keyless daily quota was exhausted; the same standard JSON is ready to publish there once an Etherscan API key is supplied.
+**Source verification:** every deployed contract is verified on BaseScan, and the same bytecode carries an exact match on Sourcify. The hook was compiled with solc 0.8.26; the router, factory and FairLimit queue with 0.8.30. Both explorers show the same settings (optimizer 200, viaIR, cancun), so the source can be read and rebuilt from the repo.
 
-| Contract | Network | Match |
-|---|---|---|
-| [SlipNope hook `0xee73…40c0`](https://sourcify.dev/#/lookup/0xee7344d34b3ec4f2ad24a668bc0d84e55de640c0) | Base 8453 | exact |
-| [GuardedSwapRouter `0x1FBd…1ad7`](https://sourcify.dev/#/lookup/0x1FBd69cf077E3eCcB9C3D4d85A87304611501ad7) | Base 8453 | exact |
-| [FairLimit `0xB44b…6F79`](https://sourcify.dev/#/lookup/0xB44b89a1aeFfbBD3967F86bE1864734255836F79) | Base 8453 | exact |
-| [VanityFactory `0x333b…6D85`](https://sourcify.dev/#/lookup/0x333bD2996F0098f2Ec5fd56D5E3f70F05C116D85) | Base 8453 | exact |
-| [SlipNopeV3 `0x6726…c0c0`](https://sourcify.dev/#/lookup/0x6726fde01c545dabb3ba514f3208ad62d058c0c0) | Base Sepolia 84532 | exact |
-| [BandRegistry `0x79Db…B2ec`](https://sourcify.dev/#/lookup/0x79Db7Ea8848FBCFD37C1C9279BCF5106f5AeB2ec) | Base Sepolia 84532 | exact |
-| [FairLimit `0xaEAd…05cF`](https://sourcify.dev/#/lookup/0xaEAd151329AA54B6cce184ac26a4D9c0577b05cF) | Base Sepolia 84532 | match |
+| Contract | Network | BaseScan | Sourcify |
+|---|---|---|---|
+| SlipNope hook `0xee73…40c0` | Base 8453 | [verified](https://basescan.org/address/0xee7344d34b3ec4f2ad24a668bc0d84e55de640c0#code) | exact |
+| GuardedSwapRouter `0x1FBd…1ad7` | Base 8453 | [verified](https://basescan.org/address/0x1FBd69cf077E3eCcB9C3D4d85A87304611501ad7#code) | exact |
+| FairLimit `0xB44b…6F79` | Base 8453 | [verified](https://basescan.org/address/0xB44b89a1aeFfbBD3967F86bE1864734255836F79#code) | exact |
+| VanityFactory `0x333b…6D85` | Base 8453 | [verified](https://basescan.org/address/0x333bD2996F0098f2Ec5fd56D5E3f70F05C116D85#code) | exact |
+| SlipNopeV3 `0x6726…c0c0` | Base Sepolia 84532 | [verified](https://sepolia.basescan.org/address/0x6726fde01c545dabb3ba514f3208ad62d058c0c0#code) | exact |
+| BandRegistry `0x79Db…B2ec` | Base Sepolia 84532 | [verified](https://sepolia.basescan.org/address/0x79Db7Ea8848FBCFD37C1C9279BCF5106f5AeB2ec#code) | exact |
+| FairLimit `0xaEAd…05cF` | Base Sepolia 84532 | [verified](https://sepolia.basescan.org/address/0xaEAd151329AA54B6cce184ac26a4D9c0577b05cF#code) | match |
 
 **Production mainnet (8453):** SlipNope `0xee7344d34b3ec4f2ad24a668bc0d84e55de640c0` (flags `0xC0` = beforeSwap + **afterSwap**) · Router `0x1FBd69cf077E3eCcB9C3D4d85A87304611501ad7` · VanityFactory `0x333bD2996F0098f2Ec5fd56D5E3f70F05C116D85` · guarded NVDAc/USDC pool (tickSpacing 10, live Chainlink feed `0x0468…8513`), initialised and seeded at fair.
 
