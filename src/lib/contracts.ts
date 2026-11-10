@@ -12,6 +12,7 @@ export const WETH = "0x4200000000000000000000000000000000000006" as Address;
 // Deployed by contracts/script/DeployCore.s.sol — set via env after deployment.
 export const SLIPNOPE = (process.env.NEXT_PUBLIC_SLIPNOPE ?? "") as Address | "";
 export const ROUTER = (process.env.NEXT_PUBLIC_ROUTER ?? "") as Address | "";
+export const FAIR_LIMIT = (process.env.NEXT_PUBLIC_FAIR_LIMIT ?? "") as Address | "";
 export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
 export interface StockInfo {
@@ -164,6 +165,20 @@ export const routerAbi = [
     ],
     outputs: [{ name: "amountOut", type: "uint256" }],
   },
+] as const;
+
+export const fairLimitAbi = [
+  { type: "function", name: "place", stateMutability: "nonpayable", inputs: [{ name: "amountIn", type: "uint96" }, { name: "maxPremiumBps", type: "uint16" }, { name: "expiresAt", type: "uint64" }], outputs: [{ name: "id", type: "uint256" }] },
+  { type: "function", name: "cancel", stateMutability: "nonpayable", inputs: [{ name: "id", type: "uint256" }], outputs: [] },
+  { type: "function", name: "fill", stateMutability: "nonpayable", inputs: [{ name: "id", type: "uint256" }, { name: "sqrtPriceLimitX96", type: "uint160" }], outputs: [{ name: "stockOut", type: "uint256" }] },
+  { type: "function", name: "status", stateMutability: "view", inputs: [{ name: "id", type: "uint256" }], outputs: [{ name: "open", type: "bool" }, { name: "adverseBpsNow", type: "uint256" }, { name: "fillableNow", type: "bool" }] },
+  { type: "function", name: "orders", stateMutability: "view", inputs: [{ name: "", type: "uint256" }], outputs: [
+      { name: "owner", type: "address" }, { name: "amountIn", type: "uint96" }, { name: "maxPremiumBps", type: "uint16" },
+      { name: "expiresAt", type: "uint64" }, { name: "createdAt", type: "uint64" }, { name: "open", type: "bool" }] },
+  { type: "function", name: "nextOrderId", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+  { type: "function", name: "openOrders", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+  { type: "function", name: "filledOrders", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+  { type: "function", name: "buyDirection", stateMutability: "view", inputs: [], outputs: [{ type: "bool" }] },
 ] as const;
 
 export type PoolKeyTuple = {

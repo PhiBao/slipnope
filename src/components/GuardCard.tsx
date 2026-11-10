@@ -170,7 +170,11 @@ export default function GuardCard({ onLedgerChange }: { onLedgerChange: () => vo
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      if (msg.includes("OverpayBlocked") || msg.includes("0x")) {
+      if (msg.includes("b89e9e66") || msg.includes("PostSwapOutOfBand")) {
+        setErrorMsg(
+          "The guard reverted this swap: at this size it would move the book further from fair than the band allows. Nothing was spent. Try a smaller size — or park it in Fair-Limit below and let the book come to you.",
+        );
+      } else if (msg.includes("OverpayBlocked") || msg.includes("0x")) {
         setErrorMsg(
           "The hook reverted this swap (OverpayBlocked). Pool price moved outside your band between preview and execution — nothing was spent.",
         );

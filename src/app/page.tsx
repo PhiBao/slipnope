@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useAccount, useConnect, useDisconnect, useSwitchChain } from "wagmi";
 import Tape from "@/components/Tape";
 import ProofStrip from "@/components/ProofStrip";
+import FairLimitPanel from "@/components/FairLimitPanel";
 import GuardCard from "@/components/GuardCard";
 import BandCard from "@/components/BandCard";
 import LedgerPanel from "@/components/LedgerPanel";
@@ -123,6 +124,7 @@ export default function Home() {
         <ProofStrip />
         <Tape />
         <GuardCard onLedgerChange={refresh} />
+        <FairLimitPanel />
         <div className="grid lg:grid-cols-2 gap-6 items-stretch">
           <BandCard />
           <LedgerPanel entries={entries} />

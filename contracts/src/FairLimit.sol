@@ -5,7 +5,7 @@ import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
 import {PoolKey} from "v4-core/types/PoolKey.sol";
 import {Currency} from "v4-core/types/Currency.sol";
-import {SlipNopeV3} from "./SlipNopeV3.sol";
+import {IGuard} from "./interfaces/IGuard.sol";
 import {GuardedSwapRouter} from "./GuardedSwapRouter.sol";
 
 /// @title FairLimit
@@ -37,7 +37,7 @@ contract FairLimit {
 
     IERC20 public immutable quote;
     IERC20 public immutable stock;
-    SlipNopeV3 public immutable hook;
+    IGuard public immutable hook;
     GuardedSwapRouter public immutable router;
     PoolKey public poolKey;
 
@@ -69,7 +69,7 @@ contract FairLimit {
     error PremiumTooHigh(uint256 adverseBps, uint16 maxPremiumBps);
     error NothingOut();
 
-    constructor(IERC20 quote_, IERC20 stock_, SlipNopeV3 hook_, GuardedSwapRouter router_, PoolKey memory key) {
+    constructor(IERC20 quote_, IERC20 stock_, IGuard hook_, GuardedSwapRouter router_, PoolKey memory key) {
         quote = quote_;
         stock = stock_;
         hook = hook_;

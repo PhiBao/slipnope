@@ -51,7 +51,7 @@ Fair-price protection used to require trusting an app to warn you before you sig
 
 **A public verdict endpoint** (`GET /guard/:symbol`) reports the hook's own onchain answer — read from `previewGuard`, the same function the UI renders before signing — plus market context. Anyone can build on it without reading our contracts.
 
-**A blocked buy becomes an order, not a dead end.** `FairLimit` lets a buyer park USDC with "no worse than +X% over fair"; anyone can fill it once the hook says the book is fair enough, and the owner can withdraw at any moment. The queue never bypasses the guard — it reads the same onchain verdict.
+**A blocked buy becomes an order, not a dead end.** `FairLimit` (`0xB44b89a1aeFfbBD3967F86bE1864734255836F79` on Base) lets a buyer park USDC with "no worse than +X% over fair"; anyone can fill it once the hook says the book is fair enough, and the owner can withdraw at any moment. The queue never bypasses the guard — it reads the same onchain verdict. It is live in the app: park an order, watch it sit in `waiting`, fill it when the book returns.
 
 **The band is not arbitrary anymore.** A keeper derives it from realized volatility (168h of hourly prices → 1h stdev × 2.5, clamped 100–800 bps) and pushes it to `BandRegistry`. The hook reads it live. The keeper can only move the band — never a price, never a pause — and a broken registry falls back to the immutable default.
 
@@ -167,6 +167,8 @@ cargo run --release  # :8787 — /health /board /ledger /stats
 - `SlipNopeV3` `0x1ff63e299b4c8c79e6d91a2811eefcda497100c0` (flags `0xC0`), seeded pool
 - Keeper run: 168h of hourly NVDAc prices → 1h stdev 61.5 bps → `setBand(154, "vol1h=61.5bps k=2.5")` → hook `previewGuard` immediately reports a 154 bps band (tx `0xfdf38040…d51d800c`)
 - Unit tests cover tightening, bounds enforcement, keeper-only access, and a reverting registry falling back to the immutable default
+
+**FairLimit, live on Base mainnet:** order placed (1 USDC, +2% cap, 7 days) reads `waiting` while the pool sits near fair; a 2 USDC order was cancelled and refunded in full. **Depth finding, documented rather than hidden:** with ~$25 of pool liquidity, a 1 USDC buy moves the book ~5.8%, so the post-swap guard refuses it. That is the guard doing its job, not a bug — but it means mainnet fills need either deeper liquidity or a wider band. The adaptive band exists precisely for that case.
 
 **FairLimit, verified on Base Sepolia:**
 - `0xaEAd151329AA54B6cce184ac26a4D9c0577b05cF` — order placed (5 USDC, +1% cap), `status()` reported fillable, fill delivered stock and emptied the queue (`0xfc9ed1e7…292a45`). A second order with a +0.5% cap refused to fill while the mock fair was moved to a 2% premium, then filled once the book returned. 7 unit tests cover refunds, expiry, cap enforcement, and owner-only cancel.

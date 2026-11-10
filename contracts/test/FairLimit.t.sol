@@ -15,6 +15,7 @@ import {SlipNopeV3} from "../src/SlipNopeV3.sol";
 import {BandRegistry} from "../src/BandRegistry.sol";
 import {GuardedSwapRouter} from "../src/GuardedSwapRouter.sol";
 import {FairLimit} from "../src/FairLimit.sol";
+import {IGuard} from "../src/interfaces/IGuard.sol";
 import {MockToken, MockFeed, MockStockToken} from "../src/mocks/MockTokens.sol";
 
 /// @notice A blocked buy can be parked as a resting order and filled later when
@@ -64,7 +65,7 @@ contract FairLimitTest is Test, Deployers {
         manager.initialize(poolKey, TickMath.getSqrtPriceAtTick(0));
 
         router = new GuardedSwapRouter(manager);
-        limit = new FairLimit(IERC20(address(quote)), IERC20(address(stock)), hook, router, poolKey);
+        limit = new FairLimit(IERC20(address(quote)), IERC20(address(stock)), IGuard(address(hook)), router, poolKey);
 
         // seed liquidity
         stock.mint(address(this), 1_000_000 ether);
