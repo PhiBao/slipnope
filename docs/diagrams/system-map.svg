@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg viewBox="0 0 1060 500" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="system-title system-desc" id="system-map-root">
+        <title id="system-title">What is enforced and what is only evidence</title>
+        <desc id="system-desc">Onchain, a trader's swap passes through the router and pool to the hook, which reads Chainlink and decides; offchain, a tape and proof service read the same chain to publish evidence, and a keeper may only move the band inside fixed bounds.</desc>
+        <defs>
+      <style>@import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&amp;family=Geist:wght@400;500;600&amp;family=Geist+Mono:wght@400;500;600&amp;family=Noto+Serif:ital@0;1&amp;family=Noto+Sans+KR:wght@400;500;600&amp;family=Noto+Serif+KR:wght@400&amp;family=Noto+Sans+TC:wght@400;500;600&amp;family=Noto+Serif+TC:wght@400&amp;display=swap');
+      #system-map-root { --color-paper: #0a0906; --color-container: #141109; --color-ink: #f5ecd7;
+      --color-muted: #a29372; --color-rule: #2e2716; --color-accent: #ffb300;
+      --font-sans: 'Geist', system-ui, sans-serif;
+      --font-serif: 'Instrument Serif', serif;
+      --font-mono: 'Geist Mono', ui-monospace, monospace; }
+      #system-map-root { font-family: var(--font-sans); color: var(--color-ink); }
+      #system-map-root .diagram-container { width: 100%; overflow-x: auto; background: var(--color-container);
+      border: 1px solid var(--color-rule); border-radius: 8px; }
+      #system-map-root .note { font-family: var(--font-mono); font-size: 0.68rem; color: var(--color-muted); margin-top: 0.9rem; line-height: 1.6; }
+      #system-map-root .diagram-container { overflow-x: visible; }</style>
+          <marker id="system-map-a2" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#a29372"/></marker>
+          <marker id="system-map-a2-acc" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#ffb300"/></marker>
+          <marker id="system-map-a2-dash" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#8a7c5c"/></marker>
+        </defs>
+
+        <!-- zone: onchain -->
+        <rect x="24" y="70" width="1012" height="196" rx="8" fill="none" stroke="#ffb300" stroke-width="1"/>
+        <text x="44" y="94" font-family="'Geist Mono', monospace" font-size="10" letter-spacing="1.6" fill="#ffb300">ONCHAIN · ENFORCED</text>
+
+        <!-- zone: offchain -->
+        <rect x="24" y="292" width="1012" height="164" rx="8" fill="none" stroke="#2e2716" stroke-dasharray="4,4"/>
+        <text x="44" y="316" font-family="'Geist Mono', monospace" font-size="10" letter-spacing="1.6" fill="#a29372">OFFCHAIN · EVIDENCE ONLY, CANNOT DECIDE</text>
+
+        <!-- connectors onchain -->
+        <line x1="190" y1="160" x2="228" y2="160" stroke="#a29372" stroke-width="1.5" marker-end="url(#system-map-a2)"/>
+        <line x1="400" y1="160" x2="438" y2="160" stroke="#a29372" stroke-width="1.5" marker-end="url(#system-map-a2)"/>
+        <line x1="620" y1="160" x2="658" y2="160" stroke="#ffb300" stroke-width="1.5" marker-end="url(#system-map-a2-acc)"/>
+        <line x1="850" y1="160" x2="888" y2="160" stroke="#a29372" stroke-width="1.5" marker-end="url(#system-map-a2)"/>
+
+        <!-- node: trader -->
+        <rect x="44" y="132" width="146" height="56" rx="6" fill="#141109" stroke="#2e2716"/>
+        <text x="117" y="156" font-family="'Geist', sans-serif" font-weight="600" font-size="13" fill="#f5ecd7" text-anchor="middle">Trader</text>
+        <text x="117" y="174" font-family="'Geist Mono', monospace" font-size="10.5" fill="#a29372" text-anchor="middle">signs one swap</text>
+
+        <rect x="232" y="132" width="168" height="56" rx="6" fill="#141109" stroke="#2e2716"/>
+        <text x="316" y="156" font-family="'Geist', sans-serif" font-weight="600" font-size="13" fill="#f5ecd7" text-anchor="middle">Guarded router</text>
+        <text x="316" y="174" font-family="'Geist Mono', monospace" font-size="10.5" fill="#a29372" text-anchor="middle">passes the trader</text>
+
+        <rect x="442" y="132" width="178" height="56" rx="6" fill="#141109" stroke="#2e2716"/>
+        <text x="531" y="156" font-family="'Geist', sans-serif" font-weight="600" font-size="13" fill="#f5ecd7" text-anchor="middle">Pool + hook</text>
+        <text x="531" y="174" font-family="'Geist Mono', monospace" font-size="10.5" fill="#a29372" text-anchor="middle">NVDAc / AAPLc / TSLAc</text>
+
+        <rect x="662" y="124" width="188" height="72" rx="6" fill="#1c170c" stroke="#ffb300" stroke-width="2"/>
+        <text x="756" y="150" font-family="'Geist', sans-serif" font-weight="600" font-size="13" fill="#ffb300" text-anchor="middle">SlipNope hook</text>
+        <text x="756" y="168" font-family="'Geist Mono', monospace" font-size="10.5" fill="#f5ecd7" text-anchor="middle">checks, then settles</text>
+        <text x="756" y="184" font-family="'Geist Mono', monospace" font-size="10" fill="#a29372" text-anchor="middle">or reverts</text>
+
+        <rect x="892" y="132" width="120" height="56" rx="6" fill="#141109" stroke="#2e2716"/>
+        <text x="952" y="156" font-family="'Geist', sans-serif" font-weight="600" font-size="13" fill="#f5ecd7" text-anchor="middle">Chainlink</text>
+        <text x="952" y="174" font-family="'Geist Mono', monospace" font-size="10.5" fill="#a29372" text-anchor="middle">reference price</text>
+
+        <!-- keeper -> band registry -->
+        <line x1="756" y1="404" x2="756" y2="252" stroke="#8a7c5c" stroke-width="1.5" stroke-dasharray="5,4" marker-end="url(#system-map-a2-dash)"/>
+        <rect x="664" y="236" width="184" height="18" fill="#141109"/>
+        <text x="756" y="249" font-family="'Geist Mono', monospace" font-size="9.5" fill="#8a7c5c" text-anchor="middle">band only, 100–800 BPS</text>
+
+        <!-- offchain: keeper -->
+        <rect x="662" y="352" width="188" height="60" rx="6" fill="#141109" stroke="#2e2716"/>
+        <text x="756" y="376" font-family="'Geist', sans-serif" font-weight="600" font-size="12.5" fill="#f5ecd7" text-anchor="middle">Keeper</text>
+        <text x="756" y="394" font-family="'Geist Mono', monospace" font-size="10" fill="#a29372" text-anchor="middle">volatility → band</text>
+
+        <!-- offchain: tape -->
+        <rect x="44" y="352" width="270" height="60" rx="6" fill="#141109" stroke="#2e2716"/>
+        <text x="179" y="376" font-family="'Geist', sans-serif" font-weight="600" font-size="12.5" fill="#f5ecd7" text-anchor="middle">Dislocation tape + verdict API</text>
+        <text x="179" y="394" font-family="'Geist Mono', monospace" font-size="10" fill="#a29372" text-anchor="middle">fair vs market, read only</text>
+
+        <!-- offchain: proof -->
+        <rect x="348" y="352" width="270" height="60" rx="6" fill="#141109" stroke="#2e2716"/>
+        <text x="483" y="376" font-family="'Geist', sans-serif" font-weight="600" font-size="12.5" fill="#f5ecd7" text-anchor="middle">Proof feed</text>
+        <text x="483" y="394" font-family="'Geist Mono', monospace" font-size="10" fill="#a29372" text-anchor="middle">counts settled swaps from logs</text>
+
+        <!-- reads -->
+        <line x1="179" y1="352" x2="179" y2="252" stroke="#8a7c5c" stroke-width="1.5" stroke-dasharray="5,4" marker-end="url(#system-map-a2-dash)"/>
+        <line x1="483" y1="352" x2="483" y2="252" stroke="#8a7c5c" stroke-width="1.5" stroke-dasharray="5,4" marker-end="url(#system-map-a2-dash)"/>
+
+        <!-- legend -->
+        <line x1="44" y1="480" x2="76" y2="480" stroke="#a29372" stroke-width="1.5"/><text x="84" y="484" font-family="'Geist Mono', monospace" font-size="10.5" fill="#a29372">value path</text>
+        <line x1="196" y1="480" x2="228" y2="480" stroke="#8a7c5c" stroke-width="1.5" stroke-dasharray="5,4"/><text x="236" y="484" font-family="'Geist Mono', monospace" font-size="10.5" fill="#a29372">read / bounded control</text>
+      </svg>

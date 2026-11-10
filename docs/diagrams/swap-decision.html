@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SlipNope — how a guarded swap is decided</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --color-paper: #0a0906; --color-container: #141109; --color-ink: #f5ecd7;
+      --color-muted: #a29372; --color-rule: #2e2716; --color-accent: #ffb300;
+      --font-sans: 'Geist', system-ui, sans-serif;
+      --font-serif: 'Instrument Serif', serif;
+      --font-mono: 'Geist Mono', ui-monospace, monospace;
+    }
+    body { font-family: var(--font-sans); background: var(--color-paper); color: var(--color-ink);
+      min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 3rem 2rem; }
+    .frame { max-width: 1180px; width: 100%; }
+    .eyebrow { font-family: var(--font-mono); font-size: 0.66rem; font-weight: 500; letter-spacing: 0.18em;
+      text-transform: uppercase; color: var(--color-muted); margin-bottom: 0.5rem; }
+    h1 { font-family: var(--font-serif); font-size: clamp(1.5rem, 2.4vw + 0.75rem, 2rem); font-weight: 400;
+      letter-spacing: -0.02em; line-height: 1.15; color: var(--color-ink); margin-bottom: 1.5rem; }
+    .diagram-container { width: 100%; overflow-x: auto; background: var(--color-container);
+      border: 1px solid var(--color-rule); border-radius: 8px; }
+    svg { width: 100%; min-width: 1000px; display: block; }
+    .note { font-family: var(--font-mono); font-size: 0.68rem; color: var(--color-muted); margin-top: 0.9rem; line-height: 1.6; }
+    @media print { .diagram-container { overflow-x: visible; } svg { min-width: 0; } }
+  </style>
+</head>
+<body>
+  <div class="frame">
+    <p class="eyebrow">Flowchart · SlipNope</p>
+    <h1>How one swap is decided, inside one transaction</h1>
+
+    <div class="diagram-container">
+      <svg viewBox="0 0 1060 520" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="decision-title decision-desc">
+        <title id="decision-title">How a guarded swap is decided</title>
+        <desc id="decision-desc">A swap reaches the pool, the hook reads the Chainlink reference, compares the pool price to fair and picks one of four verdicts, then a post-swap check refuses any trade that would leave the book dislocated.</desc>
+        <defs>
+          <marker id="ar" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#a29372"/></marker>
+          <marker id="ar-acc" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#ffb300"/></marker>
+          <marker id="ar-bad" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#ff4d2e"/></marker>
+        </defs>
+
+        <!-- connectors -->
+        <line x1="182" y1="112" x2="218" y2="112" stroke="#a29372" stroke-width="1.5" marker-end="url(#ar)"/>
+        <line x1="392" y1="112" x2="428" y2="112" stroke="#a29372" stroke-width="1.5" marker-end="url(#ar)"/>
+        <line x1="602" y1="112" x2="638" y2="112" stroke="#ffb300" stroke-width="1.5" marker-end="url(#ar-acc)"/>
+        <line x1="830" y1="242" x2="830" y2="288" stroke="#a29372" stroke-width="1.5" marker-end="url(#ar)"/>
+        <line x1="830" y1="350" x2="830" y2="396" stroke="#a29372" stroke-width="1.5" marker-end="url(#ar)"/>
+
+        <!-- loop back: a dislocating swap is refused -->
+        <path d="M670 318 L616 318 L616 160 L634 160" fill="none" stroke="#ff4d2e" stroke-width="1.5" stroke-dasharray="5,4" marker-end="url(#ar-bad)"/>
+        <rect x="612" y="188" width="0" height="0" fill="#141109"/>
+
+        <!-- node: swap arrives -->
+        <rect x="30" y="84" width="152" height="56" rx="6" fill="#141109" stroke="#2e2716"/>
+        <text x="106" y="108" font-family="'Geist', sans-serif" font-weight="600" font-size="13" fill="#f5ecd7" text-anchor="middle">Swap arrives</text>
+        <text x="106" y="126" font-family="'Geist Mono', monospace" font-size="10.5" fill="#a29372" text-anchor="middle">user signs once</text>
+
+        <!-- node: read reference -->
+        <rect x="222" y="84" width="170" height="56" rx="6" fill="#141109" stroke="#2e2716"/>
+        <text x="307" y="108" font-family="'Geist', sans-serif" font-weight="600" font-size="13" fill="#f5ecd7" text-anchor="middle">Read the reference</text>
+        <text x="307" y="126" font-family="'Geist Mono', monospace" font-size="10.5" fill="#a29372" text-anchor="middle">Chainlink, onchain</text>
+
+        <!-- focal: comparison -->
+        <rect x="432" y="76" width="170" height="72" rx="6" fill="#1c170c" stroke="#ffb300" stroke-width="2"/>
+        <text x="517" y="102" font-family="'Geist', sans-serif" font-weight="600" font-size="13" fill="#ffb300" text-anchor="middle">Pool price vs fair</text>
+        <text x="517" y="120" font-family="'Geist Mono', monospace" font-size="10.5" fill="#f5ecd7" text-anchor="middle">adverse deviation</text>
+        <text x="517" y="135" font-family="'Geist Mono', monospace" font-size="10" fill="#a29372" text-anchor="middle">in basis points</text>
+
+        <!-- verdict panel -->
+        <rect x="642" y="44" width="376" height="198" rx="6" fill="#141109" stroke="#2e2716"/>
+        <text x="664" y="68" font-family="'Geist Mono', monospace" font-size="10" letter-spacing="1.4" fill="#a29372">THE VERDICT</text>
+
+        <circle cx="672" cy="92" r="4" fill="#4ade80"/>
+        <text x="688" y="96" font-family="'Geist', sans-serif" font-weight="600" font-size="12.5" fill="#4ade80">OK</text>
+        <text x="722" y="96" font-family="'Geist Mono', monospace" font-size="10.5" fill="#a29372">inside half the band · 0.05% fee</text>
+
+        <circle cx="672" cy="126" r="4" fill="#ffb300"/>
+        <text x="688" y="130" font-family="'Geist', sans-serif" font-weight="600" font-size="12.5" fill="#ffb300">WARN</text>
+        <text x="730" y="130" font-family="'Geist Mono', monospace" font-size="10.5" fill="#a29372">inside the band · fee rises</text>
+
+        <circle cx="672" cy="160" r="4" fill="#ff4d2e"/>
+        <text x="688" y="164" font-family="'Geist', sans-serif" font-weight="600" font-size="12.5" fill="#ff4d2e">BLOCK</text>
+        <text x="734" y="164" font-family="'Geist Mono', monospace" font-size="10.5" fill="#a29372">past the band · reverts</text>
+
+        <circle cx="672" cy="194" r="4" fill="#ff4d2e"/>
+        <text x="688" y="198" font-family="'Geist', sans-serif" font-weight="600" font-size="12.5" fill="#ff4d2e">BLOCK</text>
+        <text x="734" y="198" font-family="'Geist Mono', monospace" font-size="10.5" fill="#a29372">stale or frozen feed · reverts</text>
+
+        <!-- after swap -->
+        <rect x="670" y="288" width="320" height="62" rx="6" fill="#141109" stroke="#2e2716"/>
+        <text x="830" y="312" font-family="'Geist', sans-serif" font-weight="600" font-size="13" fill="#f5ecd7" text-anchor="middle">After the swap</text>
+        <text x="830" y="331" font-family="'Geist Mono', monospace" font-size="10.5" fill="#a29372" text-anchor="middle">book still within the band?</text>
+
+        <!-- settles -->
+        <rect x="670" y="400" width="320" height="56" rx="6" fill="#1c170c" stroke="#ffb300" stroke-width="2"/>
+        <text x="830" y="424" font-family="'Geist', sans-serif" font-weight="600" font-size="13" fill="#ffb300" text-anchor="middle">Settles onchain</text>
+        <text x="830" y="442" font-family="'Geist Mono', monospace" font-size="10.5" fill="#a29372" text-anchor="middle">one receipt, both checks</text>
+
+        <!-- annotation -->
+        <text x="610" y="250" font-family="'Geist Mono', monospace" font-size="10" fill="#ff4d2e" text-anchor="end">dislocates → blocked</text>
+
+        <!-- legend -->
+        <line x1="30" y1="492" x2="62" y2="492" stroke="#a29372" stroke-width="1.5"/><text x="70" y="496" font-family="'Geist Mono', monospace" font-size="10.5" fill="#a29372">normal path</text>
+        <line x1="176" y1="492" x2="208" y2="492" stroke="#ffb300" stroke-width="1.5"/><text x="216" y="496" font-family="'Geist Mono', monospace" font-size="10.5" fill="#a29372">focal decision</text>
+        <line x1="328" y1="492" x2="360" y2="492" stroke="#ff4d2e" stroke-width="1.5"/><text x="368" y="496" font-family="'Geist Mono', monospace" font-size="10.5" fill="#a29372">refusal</text>
+      </svg>
+    </div>
+
+    <p class="note">The refusal lives in the pool, not in the app: any frontend, bot or agent that routes through a guarded pool inherits it. No admin key can disable it, and the reference feed is fixed at pool creation.</p>
+  </div>
+</body>
+</html>

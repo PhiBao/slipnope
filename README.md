@@ -55,6 +55,10 @@ Fair-price protection used to require trusting an app to warn you before you sig
 
 **The band is not arbitrary anymore.** A keeper derives it from realized volatility (168h of hourly prices → 1h stdev × 2.5, clamped 100–800 bps) and pushes it to `BandRegistry`. The hook reads it live. The keeper can only move the band — never a price, never a pause — and a broken registry falls back to the immutable default.
 
+![How one swap is decided](docs/diagrams/swap-decision.svg)
+
+*One transaction, two checks: `beforeSwap` compares the pool price to the Chainlink reference, `afterSwap` refuses a trade that would leave the book dislocated. Both live in the hook, not in an app.*
+
 **An advisory layer that can never decide.** TypeSafe Jev scores the *context* around a verdict (execution quality, regime: normal / thin book / frozen reference / dislocated). It is labelled advisory, cached, and degrades to nothing; the swap decision is deterministic Solidity.
 
 ## 2. User experience
@@ -65,6 +69,10 @@ Fair-price protection used to require trusting an app to warn you before you sig
 4. **Retention loop:** Overpay Ledger records fills *and* blocks with regime context ("you overpay off-hours") → autopsy → tighter discipline by knowing your history → shareable saved-$ receipts.
 
 ## 3. Architecture
+
+![What is enforced and what is only evidence](docs/diagrams/system-map.svg)
+
+*The hook never reads an offchain service. If the tape, the proof feed and the keeper all went dark, every guarded pool would behave exactly the same — the band would simply stay where it was.*
 
 ```
 contracts/ (Foundry, Solidity — EVM hooks must be Solidity)
