@@ -1,4 +1,4 @@
-# Submission pack — Base Stocks Maxxing
+# Submission pack. Base Stocks Maxxing
 
 Track: **Programmable Stock Markets** (a net-new market primitive: fair-price
 execution guard + dislocation index + open verdict API).
@@ -13,12 +13,12 @@ for uploads). Poster: `demo/poster.jpg`.
    track, and the project details.
 3. Keep the app live and the pools working until the season closes (Dec 5).
 
-## X post — draft
+## X post. draft
 
 > Tokenized stocks trade 24/7. The market that prices them doesn't.
 >
 > SlipNope is a Uniswap v4 hook that refuses the trade when you'd overpay
-> Chainlink fair value. Not a warning — the swap reverts.
+> Chainlink fair value. Not a warning. the swap reverts.
 >
 > 3 guarded markets live on Base. 14 swaps already adjudicated. $0 custodied.
 >
@@ -30,41 +30,50 @@ Attach `demo/slipnope-demo.mp4`. Optional thread:
   (onchain) vs the market quote (Cambrian). Right now MSTRc trades +11.8% over
   fair and TSLAc +6.9%. The guard blocks a buy at that price.
 - 3/ A refused swap is a real failed transaction, not a UI state. Receipt:
-  0x8c29ed1f…cd2f2 — status 0, `PostSwapOutOfBand(628, 300)`.
+  0x8c29ed1f…cd2f2. status 0, `PostSwapOutOfBand(628, 300)`.
 - 4/ The band isn't a magic number: a keeper derives it from realized
-  volatility inside hard bounds. The keeper can only move the band — never a
+  volatility inside hard bounds. The keeper can only move the band. never a
   price, never a pause.
 - 5/ A block isn't a dead end: park the order at your own maximum and it fills
   when the book comes back. Withdraw any time.
 
-## Form answers (short form)
+## Form answers (copy-paste)
 
-**What it does.**
-A fair-price execution guard for tokenized stocks on Base. A Uniswap v4 hook
-reads the Chainlink reference price inside `beforeSwap` and refuses any trade
-that would overpay beyond a band; `afterSwap` refuses a trade that would leave
-the book dislocated. Three markets live (NVDAc, AAPLc, TSLAc), a market-wide
-dislocation board, a public verdict API, and a resting-order queue so a refusal
-isn't a dead end.
+**Project name**
+SlipNope
 
-**Built on Base.**
-Uniswap v4 PoolManager + hooks on Base mainnet, Coinbase tokenized stocks
-(B20), Chainlink tokenized-equity feeds, Relay for acquiring test inventory,
-Cambrian for market evidence, TypeSafe for an advisory layer. Contracts
-verified on BaseScan; the app reads the chain directly.
+**Describe your project in 1-2 sentences**
+A Uniswap v4 hook on Base that checks every tokenized-stock swap against the Chainlink reference price and reverts the trade when the buyer would overpay. Three guarded markets are live: NVDAc, AAPLc and TSLAc.
 
-**What is real.**
-- 3 guarded pools, seeded; AAPLc and TSLAc initialised at fair to the wei
-- A real failed transaction proving the block (status 0)
-- 14 settled guarded swaps from 4 wallets, counted from `GuardAllowed` logs
-- 24 tests across 4 suites, including a mainnet-fork suite
-- FairLimit queue deployed and used on mainnet
+**Current stage**
+Live product
 
-**What is not.**
-No third-party audit yet. Mainnet pools are thin (~$25 each), so trades above
-roughly $0.30 can be refused by the post-swap bound — documented rather than
-hidden. The adaptive-band hook and keeper are proven on Sepolia; mainnet still
-runs the fixed-band version.
+**Does your project have a token?**
+No
+
+**Entry type**
+Build New
+
+**Intended Base track**
+Programmable Stock Markets
+
+**Launch partners you want to consider working with**
+None
+
+**What support is most valuable for you?**
+Liquidity in the guarded pools, and an introduction to a market maker willing to quote inside the band. The contracts and the app are done. The pools hold about twenty-five dollars each, which is enough to prove the guard but too thin for a normal-sized trade.
+
+**Product or demo URL**
+https://slipnope.vercel.app
+
+**Why should we select you to be a part of Stocks Maxxing?**
+Tokenized stocks on Base trade around the clock against a reference price that stops updating when the market closes. Every wallet still lets you buy. SlipNope moves the fair-price check into the pool itself: a v4 hook reads the Chainlink feed during the swap and reverts the trade if the price has moved past the band. The refusal is a real failed transaction on Base, and any frontend or bot that routes through the pool inherits it.
+
+Three markets are live. The AAPLc and TSLAc pools were initialised at the reference price to the wei, and fifteen swaps from four different wallets have settled through the guard. We also publish a board that prices ten Coinbase stock tokens two ways, Chainlink against the market, so the overpayment is visible before anyone trades. A public endpoint reports the hook's own verdict for any of those tokens.
+
+The limitation is liquidity, not code. A trade above roughly thirty cents can be refused by the post-swap check because the pool is thin. That is the guard doing its job, and it is why support with depth matters more to us than another feature. A volatility-adaptive band and a resting-order queue already exist; the queue is live on mainnet, the adaptive band is proven on Sepolia.
+
+Base is the only chain where this can be built today, because it is the only place with Coinbase stock tokens, per-asset Chainlink equity feeds and Uniswap v4 in one network. With the season we would deepen the NVDAc pool, move the adaptive band to mainnet, and put the guard in front of wallets that route stock-token orders.
 
 ## Verification links
 
@@ -82,10 +91,8 @@ runs the fixed-band version.
 
 ## 60-second judge path
 
-1. Open the app. Read the **dislocation tape** — market vs Chainlink, with a
-   `BLOCK` badge where a buy would overpay.
-2. Open `https://slipnope-api.fly.dev/guard/tslac` — the verdict is read from
-   the hook, not computed in the browser.
-3. Click the blocked transaction — BaseScan shows status 0 and the reason.
+1. Open the app. Read the dislocation tape: market vs Chainlink, with a `BLOCK` badge where a buy would overpay.
+2. Open `https://slipnope-api.fly.dev/guard/tslac`. The verdict is read from the hook.
+3. Click the blocked transaction. BaseScan shows status 0 and the reason.
 4. Scroll to **Fair-Limit**, park 1 USDC at your own cap, withdraw it.
-5. Check `/proof` — the counters come from chain logs, not our database.
+5. Check `/proof`. The counters come from chain logs.
