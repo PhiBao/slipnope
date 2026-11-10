@@ -80,6 +80,7 @@ Base is the only chain where this can be built today, because it is the only pla
 | What | Where |
 |---|---|
 | App | https://slipnope.vercel.app |
+| Source (Sourcify, exact match) | https://sourcify.dev/#/lookup/0xee7344d34b3ec4f2ad24a668bc0d84e55de640c0 |
 | Hook (v2, mainnet) | https://basescan.org/address/0xee7344d34b3ec4f2ad24a668bc0d84e55de640c0 |
 | Router | https://basescan.org/address/0x1FBd69cf077E3eCcB9C3D4d85A87304611501ad7 |
 | FairLimit | https://basescan.org/address/0xB44b89a1aeFfbBD3967F86bE1864734255836F79 |
