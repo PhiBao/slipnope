@@ -92,15 +92,33 @@ fn summarise(history: &[(i64, f64)], market: Option<f64>) -> (Option<f64>, Optio
 }
 
 pub async fn build(state: &AppState) -> Vec<TapeRow> {
+    // Chainlink reads are independent — fire them together so a cold start
+    // warms in ~2s instead of ~15s.
+    let mut chainlink = std::collections::HashMap::new();
+    let mut set = tokio::task::JoinSet::new();
+    for s in UNIVERSE {
+        let state = state.clone();
+        let feed: &'static str = s.feed;
+        set.spawn(async move {
+            let v = match state.eth_call(feed, onchain::SEL_LATEST_ROUND).await {
+                Ok(hex) => onchain::decode_round(&hex),
+                Err(_) => None,
+            };
+            (feed, v)
+        });
+    }
+    while let Some(res) = set.join_next().await {
+        if let Ok((feed, v)) = res {
+            chainlink.insert(feed, v);
+        }
+    }
+
     let mut rows = Vec::with_capacity(UNIVERSE.len());
     for s in UNIVERSE {
         // Fair: the onchain Chainlink reference the hook enforces.
-        let (fair, updated) = match state.eth_call(s.feed, onchain::SEL_LATEST_ROUND).await {
-            Ok(hex) => match onchain::decode_round(&hex) {
-                Some(v) => (Some(v.0), Some(v.1)),
-                None => (None, None),
-            },
-            Err(_) => (None, None),
+        let (fair, updated) = match chainlink.get(s.feed).and_then(|v| *v) {
+            Some((p, u)) => (Some(p), Some(u)),
+            None => (None, None),
         };
 
         // Market: independent offchain view of what Base is trading at.

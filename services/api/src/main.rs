@@ -101,6 +101,8 @@ pub struct AppState {
     tape_cache: Arc<RwLock<Option<(u64, serde_json::Value)>>>,
     /// Snapshot of the onchain proof counters (GuardAllowed logs).
     proof_cache: Arc<RwLock<Option<(u64, serde_json::Value)>>>,
+    /// Where the tape snapshot persists across machine restarts.
+    tape_file: String,
 }
 
 // ---------------------------------------------------------------- rpc
@@ -289,6 +291,7 @@ async fn get_digest(State(state): State<Arc<AppState>>) -> Json<serde_json::Valu
 
 /// Rebuilds the tape snapshot; the only writer of `tape_cache`.
 async fn refresh_tape(state: Arc<AppState>) -> serde_json::Value {
+    let tape_file_path = state.tape_file.clone();
     let rows = tape::build(&state).await;
     let all_failed = rows.iter().all(|r| r.fair_usd.is_none());
     let dislocated = rows.iter().filter(|r| r.would_block).count();
@@ -307,7 +310,7 @@ async fn refresh_tape(state: Arc<AppState>) -> serde_json::Value {
     // to the first visitor. Persist the last good snapshot and reload it on boot.
     if !all_failed {
         if let Ok(json) = serde_json::to_string(&value) {
-            let _ = tokio::fs::write("/tmp/tape.json", json).await;
+            let _ = tokio::fs::write(&tape_file_path, json).await;
         }
         *state.tape_cache.write().await = Some((now_secs(), value.clone()));
     }
@@ -567,6 +570,7 @@ async fn main() {
     let rpc = std::env::var("RH_RPC_URL").unwrap_or_else(|_| DEFAULT_RPC.to_string());
     let port: u16 = std::env::var("PORT").ok().and_then(|p| p.parse().ok()).unwrap_or(8787);
     let ledger_file = std::env::var("LEDGER_FILE").unwrap_or_else(|_| "ledger.jsonl".to_string());
+    let tape_file = std::env::var("TAPE_FILE").unwrap_or_else(|_| "/tmp/tape.json".to_string());
     let cambrian_key = std::env::var("CAMBRIAN_API_KEY").unwrap_or_default();
     let typesafe_key = std::env::var("TYPESAFE_API_KEY").unwrap_or_default();
 
@@ -581,7 +585,7 @@ async fn main() {
     println!("slipnope-api: loaded {} ledger entries from {ledger_file}", entries.len());
 
     // Restore the previous tape snapshot so a cold start is never empty.
-    let restored: Option<(u64, serde_json::Value)> = match tokio::fs::read_to_string("/tmp/tape.json").await {
+    let restored: Option<(u64, serde_json::Value)> = match tokio::fs::read_to_string(&tape_file).await {
         Ok(body) => serde_json::from_str::<serde_json::Value>(&body)
             .ok()
             .map(|v| (v["generatedAt"].as_u64().unwrap_or(0), v)),
@@ -599,6 +603,7 @@ async fn main() {
         jev: jev::Jev::new(typesafe_key),
         tape_cache: Arc::new(RwLock::new(restored)),
         proof_cache: Arc::new(RwLock::new(None)),
+        tape_file,
     });
 
     // Background warmer: keeps the tape hot so public reads are instant and

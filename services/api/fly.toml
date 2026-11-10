@@ -17,6 +17,10 @@ primary_region = "sin"
 [http_service.limits]
   concurrency = 50
 
+[[mounts]]
+  source = "slipnope_data"
+  destination = "/data"
+
 [[vm]]
   size = "shared-cpu-1x"
   memory = "256mb"

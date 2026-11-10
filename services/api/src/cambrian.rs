@@ -128,7 +128,7 @@ impl Cambrian {
 
     async fn get(&self, url: &str) -> Result<Table, String> {
         // The free tier enforces a per-path RPS limit; space calls out.
-        tokio::time::sleep(std::time::Duration::from_millis(220)).await;
+        tokio::time::sleep(std::time::Duration::from_millis(150)).await;
         let resp = self
             .http
             .get(url)
