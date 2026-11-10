@@ -1,17 +1,21 @@
 //! SlipNope API — Rust (Axum) support service.
 //!
 //! Responsibilities (deliberately thin; the hook is the product):
-//!   GET  /health   liveness + chain id check against the Base RPC
-//!   GET  /board    live Chainlink fair prices + NVDA market premium (v3 pool),
-//!                  computed server-side from raw eth_call — same numbers the
-//!                  hook enforces, independently reproducible
-//!   POST /ledger   record an Overpay Ledger entry (fill or block)
-//!   GET  /ledger/:wallet   entries for a wallet + saved-$ total
-//!   GET  /stats    aggregate proof counters (blocks, fills, $ saved)
+//!   GET  /health            liveness + Base RPC / feed reachability
+//!   GET  /tape              the Dislocation Tape: market-wide Chainlink-vs-market
+//!                           premium for tracked tokenized stocks, with a
+//!                           "would SlipNope block this?" verdict
+//!   GET  /board             Chainlink fair prices only (no third-party dependency)
+//!   POST /ledger            record an Overpay Ledger entry (fill or block)
+//!   GET  /ledger/:wallet    entries for a wallet + saved-$ total
+//!   GET  /stats             aggregate proof counters
 //!
-//! Ledger persistence: append-only JSON lines file (LEDGER_FILE, default
-//! ./ledger.jsonl) loaded at boot. No database to operate for a hackathon
-//! deployment; the file is the audit trail.
+//! Trust boundary: enforcement is onchain (Chainlink), never this service.
+//! Cambrian data is market *evidence*, clearly labelled as such.
+
+mod cambrian;
+mod onchain;
+mod tape;
 
 use axum::{
     extract::{Path, State},
@@ -21,25 +25,20 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::HashMap,
     sync::Arc,
     time::{SystemTime, UNIX_EPOCH},
 };
 use tokio::sync::RwLock;
 use tower_http::cors::CorsLayer;
 
-// ---------------------------------------------------------------- consts
-
 const DEFAULT_RPC: &str = "https://mainnet.base.org";
 
-// Chainlink tokenized-equity feeds (Base mainnet, verified onchain 2026-11-09)
+// Chainlink tokenized-equity feeds (Base mainnet, verified onchain 2026-11-10)
 const FEEDS: [(&str, &str); 3] = [
     ("NVDAc", "0x04689a41629776563E6822F76f2e57D148d28513"),
     ("AAPLc", "0x787f13dEa48Db0897CbCDD985de77809D837F988"),
     ("TSLAc", "0xFaf869185383a24F8cb00e27BdA6b63B9905DCb4"),
 ];
-// latestRoundData() selector
-const SEL_LATEST_ROUND: &str = "0xfeaf968c";
 
 // ---------------------------------------------------------------- types
 
@@ -71,8 +70,6 @@ struct LedgerEntry {
 struct BoardRow {
     symbol: String,
     fair_usd: Option<f64>,
-    market_usd: Option<f64>,
-    premium_bps: Option<i64>,
     feed_age_secs: Option<u64>,
     feed: String,
 }
@@ -86,80 +83,112 @@ struct Stats {
 }
 
 #[derive(Clone)]
-struct AppState {
+pub struct AppState {
     rpc: String,
     http: reqwest::Client,
     ledger: Arc<RwLock<Vec<LedgerEntry>>>,
     ledger_file: String,
+    cambrian: cambrian::Cambrian,
+    /// Snapshot of the Dislocation Tape, rebuilt by a background warmer so the
+    /// public endpoint answers in milliseconds and Cambrian quota stays bounded.
+    tape_cache: Arc<RwLock<Option<(u64, serde_json::Value)>>>,
 }
 
 // ---------------------------------------------------------------- rpc
 
-async fn eth_call(state: &AppState, to: &str, data: &str) -> Result<String, String> {
-    let body = serde_json::json!({
-        "jsonrpc": "2.0", "id": 1, "method": "eth_call",
-        "params": [{ "to": to, "data": data }, "latest"]
-    });
-    let resp: serde_json::Value = state
-        .http
-        .post(&state.rpc)
-        .json(&body)
-        .send()
-        .await
-        .map_err(|e| e.to_string())?
-        .json()
-        .await
-        .map_err(|e| e.to_string())?;
-    resp["result"]
-        .as_str()
-        .map(|s| s.trim_start_matches("0x").to_string())
-        .ok_or_else(|| format!("rpc error: {resp}"))
-}
-
-/// Decode the int256 answer + updatedAt out of a latestRoundData() blob
-/// (5 x 32-byte words: roundId, answer, startedAt, updatedAt, answeredInRound).
-fn decode_feed(hex: &str) -> Option<(f64, u64)> {
-    if hex.len() < 320 {
-        return None;
+impl AppState {
+    pub async fn eth_call(&self, to: &str, data: &str) -> Result<String, String> {
+        let body = serde_json::json!({
+            "jsonrpc": "2.0", "id": 1, "method": "eth_call",
+            "params": [{ "to": to, "data": data }, "latest"]
+        });
+        let resp: serde_json::Value = self
+            .http
+            .post(&self.rpc)
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| e.to_string())?
+            .json()
+            .await
+            .map_err(|e| e.to_string())?;
+        resp["result"]
+            .as_str()
+            .map(|s| s.trim_start_matches("0x").to_string())
+            .ok_or_else(|| format!("rpc error: {resp}"))
     }
-    let word = |i: usize| &hex[i * 64..(i + 1) * 64];
-    // answer is int256; prices are positive, treat as unsigned magnitude.
-    let answer = u128::from_str_radix(&word(1)[32..], 16).ok()? as f64 / 1e8;
-    let updated = u64::from_str_radix(word(3), 16).ok()?;
-    Some((answer, updated))
 }
 
-fn now_secs() -> u64 {
+pub fn now_secs() -> u64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
 }
 
 // ---------------------------------------------------------------- handlers
 
 async fn health(State(state): State<Arc<AppState>>) -> Json<serde_json::Value> {
-    let chain = eth_call(&state, FEEDS[0].1, SEL_LATEST_ROUND).await;
+    let chain = state.eth_call(FEEDS[0].1, onchain::SEL_LATEST_ROUND).await;
     Json(serde_json::json!({
         "ok": chain.is_ok(),
         "service": "slipnope-api",
         "chainId": 8453,
         "rpc": state.rpc,
         "feedReachable": chain.is_ok(),
+        "cambrian": state.cambrian.is_configured(),
+        "bandBps": tape::BAND_BPS,
     }))
+}
+
+/// The Dislocation Tape — market vs Chainlink fair across the tracked universe.
+/// Served from a snapshot refreshed by the background warmer.
+async fn get_tape(State(state): State<Arc<AppState>>) -> Json<serde_json::Value> {
+    let cached = state.tape_cache.read().await.clone();
+    match cached {
+        Some((at, mut value)) => {
+            if let Some(obj) = value.as_object_mut() {
+                obj.insert("cachedAt".into(), serde_json::json!(at));
+                obj.insert("staleSecs".into(), serde_json::json!(now_secs().saturating_sub(at)));
+            }
+            Json(value)
+        }
+        None => Json(serde_json::json!({
+            "generatedAt": now_secs(),
+            "bandBps": tape::BAND_BPS,
+            "rows": [],
+            "warming": true,
+        })),
+    }
+}
+
+/// Rebuilds the tape snapshot; the only writer of `tape_cache`.
+async fn refresh_tape(state: Arc<AppState>) -> serde_json::Value {
+    let rows = tape::build(&state).await;
+    let dislocated = rows.iter().filter(|r| r.would_block).count();
+    let value = serde_json::json!({
+        "generatedAt": now_secs(),
+        "bandBps": tape::BAND_BPS,
+        "dislocated": dislocated,
+        "tracked": rows.len(),
+        "rows": rows,
+        "sources": {
+            "fair": "Chainlink tokenized-equity feed, read onchain (same value the hook enforces)",
+            "market": "Cambrian API, Uniswap v3 derived USD price on Base",
+        },
+    });
+    *state.tape_cache.write().await = Some((now_secs(), value.clone()));
+    value
 }
 
 async fn board(State(state): State<Arc<AppState>>) -> Result<Json<Vec<BoardRow>>, StatusCode> {
     let mut rows = Vec::new();
     for (symbol, feed) in FEEDS.iter() {
-        let hex = eth_call(&state, feed, SEL_LATEST_ROUND)
+        let hex = state
+            .eth_call(feed, onchain::SEL_LATEST_ROUND)
             .await
             .map_err(|_| StatusCode::BAD_GATEWAY)?;
-        let (fair, updated) = decode_feed(&hex).ok_or(StatusCode::BAD_GATEWAY)?;
-        let market: Option<f64> = None;
-        let premium_bps: Option<i64> = None;
+        let (fair, updated) = onchain::decode_round(&hex).ok_or(StatusCode::BAD_GATEWAY)?;
         rows.push(BoardRow {
             symbol: symbol.to_string(),
             fair_usd: Some(fair),
-            market_usd: market,
-            premium_bps,
             feed_age_secs: Some(now_secs().saturating_sub(updated)),
             feed: feed.to_string(),
         });
@@ -178,7 +207,6 @@ async fn post_ledger(
         let mut guard = state.ledger.write().await;
         guard.push(entry.clone());
     }
-    // Append-only audit file; failure to persist must not lose the response path.
     if let Ok(line) = serde_json::to_string(&entry) {
         let file = state.ledger_file.clone();
         tokio::spawn(async move {
@@ -216,14 +244,15 @@ async fn stats(State(state): State<Arc<AppState>>) -> Json<Stats> {
         entries: guard.len(),
         blocks,
         fills: guard.len() - blocks,
-        saved_usd_total: 0.0 + (guard
-            .iter()
-            .filter(|e| e.decision == "BLOCK")
-            .map(|e| e.saved_usd)
-            .sum::<f64>()
-            * 100.0)
-            .round()
-            / 100.0,
+        saved_usd_total: 0.0
+            + (guard
+                .iter()
+                .filter(|e| e.decision == "BLOCK")
+                .map(|e| e.saved_usd)
+                .sum::<f64>()
+                * 100.0)
+                .round()
+                / 100.0,
     })
 }
 
@@ -234,8 +263,8 @@ async fn main() {
     let rpc = std::env::var("RH_RPC_URL").unwrap_or_else(|_| DEFAULT_RPC.to_string());
     let port: u16 = std::env::var("PORT").ok().and_then(|p| p.parse().ok()).unwrap_or(8787);
     let ledger_file = std::env::var("LEDGER_FILE").unwrap_or_else(|_| "ledger.jsonl".to_string());
+    let cambrian_key = std::env::var("CAMBRIAN_API_KEY").unwrap_or_default();
 
-    // Load persisted ledger (JSON lines).
     let mut entries: Vec<LedgerEntry> = Vec::new();
     if let Ok(content) = tokio::fs::read_to_string(&ledger_file).await {
         for line in content.lines() {
@@ -245,17 +274,38 @@ async fn main() {
         }
     }
     println!("slipnope-api: loaded {} ledger entries from {ledger_file}", entries.len());
-    let _ = HashMap::<String, ()>::new(); // keep HashMap import honest for future indexing
 
     let state = Arc::new(AppState {
         rpc,
         http: reqwest::Client::new(),
         ledger: Arc::new(RwLock::new(entries)),
         ledger_file,
+        cambrian: cambrian::Cambrian::new(cambrian_key),
+        tape_cache: Arc::new(RwLock::new(None)),
     });
+
+    // Background warmer: keeps the tape hot so public reads are instant and
+    // Cambrian calls stay bounded (one full sweep every 10 minutes).
+    {
+        let warmer = state.clone();
+        tokio::spawn(async move {
+            loop {
+                let started = std::time::Instant::now();
+                let tape = refresh_tape(warmer.clone()).await;
+                let rows = tape["tracked"].as_u64().unwrap_or(0);
+                let dislocated = tape["dislocated"].as_u64().unwrap_or(0);
+                println!(
+                    "tape refreshed: {rows} tracked, {dislocated} dislocated, {:?}",
+                    started.elapsed()
+                );
+                tokio::time::sleep(std::time::Duration::from_secs(600)).await;
+            }
+        });
+    }
 
     let app = Router::new()
         .route("/health", get(health))
+        .route("/tape", get(get_tape))
         .route("/board", get(board))
         .route("/ledger", post(post_ledger))
         .route("/ledger/:wallet", get(get_ledger))
