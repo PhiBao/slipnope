@@ -237,6 +237,56 @@ async fn get_tape(State(state): State<Arc<AppState>>) -> Json<serde_json::Value>
     }
 }
 
+/// A ready-to-post digest of the worst dislocations — build-in-public fuel that
+/// is generated from measured data, not written by hand.
+async fn get_digest(State(state): State<Arc<AppState>>) -> Json<serde_json::Value> {
+    let cached = state.tape_cache.read().await.clone();
+    let Some((at, value)) = cached else {
+        return Json(serde_json::json!({ "ready": false, "reason": "tape warming" }));
+    };
+    let mut rows: Vec<&serde_json::Value> = value["rows"]
+        .as_array()
+        .map(|a| a.iter().filter(|r| r["premium_bps"].as_i64().is_some()).collect())
+        .unwrap_or_default();
+    rows.sort_by_key(|r| -r["premium_bps"].as_i64().unwrap_or(0).abs());
+
+    let band = value["bandBps"].as_i64().unwrap_or(300);
+    let mut lines = Vec::new();
+    for r in rows.iter().take(5) {
+        let sym = r["symbol"].as_str().unwrap_or("?");
+        let prem = r["premium_bps"].as_i64().unwrap_or(0);
+        let blocked = r["would_block"].as_bool().unwrap_or(false);
+        let conf = r["quote_confidence"].as_str().unwrap_or("unknown");
+        let mark = if blocked { "BLOCK" } else { "ok" };
+        lines.push(format!(
+            "{} {:+.2}% vs Chainlink fair [{}] ({})",
+            sym,
+            prem as f64 / 100.0,
+            mark,
+            conf
+        ));
+    }
+    let dislocated = value["dislocated"].as_i64().unwrap_or(0);
+    let tracked = value["tracked"].as_i64().unwrap_or(0);
+    let text = format!(
+        "SlipNope tape · {} of {} tokenized stocks on Base are priced above fair right now (guard band ±{:.2}%):\n{}\n\nFair = Chainlink (onchain). Market = Cambrian. A buy past the band cannot settle in a guarded pool.",
+        dislocated,
+        tracked,
+        band as f64 / 100.0,
+        lines.iter().map(|l| format!("· {l}")).collect::<Vec<_>>().join("\n")
+    );
+
+    Json(serde_json::json!({
+        "ready": true,
+        "generatedAt": at,
+        "dislocated": dislocated,
+        "tracked": tracked,
+        "bandBps": band,
+        "text": text,
+        "rows": rows.iter().take(5).collect::<Vec<_>>(),
+    }))
+}
+
 /// Rebuilds the tape snapshot; the only writer of `tape_cache`.
 async fn refresh_tape(state: Arc<AppState>) -> serde_json::Value {
     let rows = tape::build(&state).await;
@@ -588,6 +638,7 @@ async fn main() {
     let app = Router::new()
         .route("/health", get(health))
         .route("/tape", get(get_tape))
+        .route("/tape/digest", get(get_digest))
         .route("/proof", get(get_proof))
         .route("/guard/:symbol", get(get_guard))
         .route("/board", get(board))

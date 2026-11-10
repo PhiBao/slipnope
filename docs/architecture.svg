@@ -1,83 +1,102 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1240 660" font-family="monospace">
-  <rect width="1240" height="660" fill="#0a0906"/>
-  <text x="40" y="48" fill="#f5ecd7" font-size="22" font-weight="bold">ROBINHOOK — HOW A GUARDED SWAP WORKS</text>
-  <text x="40" y="72" fill="#a29372" font-size="12">Uniswap v4 hook enforcement on Robinhood Chain (4663) · one transaction, no app in the middle</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 760" font-family="monospace">
+  <rect width="1280" height="760" fill="#0a0906"/>
+  <text x="40" y="44" fill="#f5ecd7" font-size="21" font-weight="bold">SLIPNOPE — SYSTEM MAP</text>
+  <text x="40" y="68" fill="#a29372" font-size="11.5">enforcement onchain · evidence offchain · a keeper that may only move the band, never the guard</text>
 
-  <!-- actors -->
-  <g font-size="13" text-anchor="middle">
-    <rect x="40" y="110" width="150" height="54" fill="#141109" stroke="#ffb300" stroke-width="2"/>
-    <text x="115" y="133" fill="#f5ecd7" font-weight="bold">TRADER</text>
-    <text x="115" y="152" fill="#a29372" font-size="11">wallet signs</text>
+  <!-- enforcement lane -->
+  <rect x="40" y="92" width="1200" height="212" fill="#141109" stroke="#ffb300" stroke-width="1.5"/>
+  <text x="60" y="116" fill="#ffb300" font-size="12" font-weight="bold">ONCHAIN — THE GUARD</text>
 
-    <rect x="250" y="110" width="190" height="54" fill="#141109" stroke="#2e2716" stroke-width="2"/>
-    <text x="345" y="133" fill="#f5ecd7" font-weight="bold">GUARDED SWAP ROUTER</text>
-    <text x="345" y="152" fill="#a29372" font-size="11">hookData = trader</text>
+  <g font-size="11.5" text-anchor="middle">
+    <rect x="70" y="134" width="150" height="60" fill="#0a0906" stroke="#2e2716"/>
+    <text x="145" y="158" fill="#f5ecd7" font-weight="bold">TRADER</text>
+    <text x="145" y="176" fill="#a29372">signs one tx</text>
 
-    <rect x="500" y="110" width="190" height="54" fill="#141109" stroke="#2e2716" stroke-width="2"/>
-    <text x="595" y="133" fill="#f5ecd7" font-weight="bold">V4 POOLMANAGER</text>
-    <text x="595" y="152" fill="#a29372" font-size="11">NVDA / USDG pool</text>
+    <rect x="258" y="134" width="176" height="60" fill="#0a0906" stroke="#2e2716"/>
+    <text x="346" y="155" fill="#f5ecd7" font-weight="bold">GUARDED ROUTER</text>
+    <text x="346" y="172" fill="#a29372">hookData = trader</text>
+    <text x="346" y="187" fill="#a29372">sweeps residuals</text>
 
-    <rect x="750" y="110" width="210" height="54" fill="#1c170c" stroke="#ffb300" stroke-width="2"/>
-    <text x="855" y="133" fill="#ffb300" font-weight="bold">ROBINHOOK (beforeSwap)</text>
-    <text x="855" y="152" fill="#a29372" font-size="11">the guard lives here</text>
+    <rect x="472" y="134" width="150" height="60" fill="#0a0906" stroke="#2e2716"/>
+    <text x="547" y="158" fill="#f5ecd7" font-weight="bold">POOLMANAGER</text>
+    <text x="547" y="176" fill="#a29372">NVDAc / USDC</text>
 
-    <rect x="1020" y="110" width="180" height="54" fill="#141109" stroke="#2e2716" stroke-width="2"/>
-    <text x="1110" y="133" fill="#f5ecd7" font-weight="bold">CHAINLINK FEED</text>
-    <text x="1110" y="152" fill="#a29372" font-size="11">NVDA fair price</text>
+    <rect x="660" y="126" width="248" height="76" fill="#1c170c" stroke="#ffb300" stroke-width="2"/>
+    <text x="784" y="148" fill="#ffb300" font-weight="bold">SLIPNOPE HOOK (0xC0)</text>
+    <text x="784" y="166" fill="#f5ecd7" font-size="10.5">beforeSwap: OK / WARN / BLOCK</text>
+    <text x="784" y="182" fill="#f5ecd7" font-size="10.5">afterSwap: |price − fair| ≤ band</text>
+
+    <rect x="946" y="134" width="150" height="60" fill="#0a0906" stroke="#2e2716"/>
+    <text x="1021" y="155" fill="#f5ecd7" font-weight="bold">CHAINLINK</text>
+    <text x="1021" y="172" fill="#a29372">24/5 total-return</text>
+    <text x="1021" y="187" fill="#a29372">feed, per stock</text>
+
+    <rect x="1130" y="134" width="92" height="60" fill="#0a0906" stroke="#2e2716"/>
+    <text x="1176" y="158" fill="#f5ecd7" font-weight="bold">WARN</text>
+    <text x="1176" y="176" fill="#a29372">fees → LPs</text>
   </g>
-
-  <!-- flow arrows -->
-  <g stroke="#a29372" stroke-width="1.5" font-size="11.5">
-    <line x1="190" y1="137" x2="246" y2="137" marker-end="url(#arr)"/>
-    <line x1="440" y1="137" x2="496" y2="137" marker-end="url(#arr)"/>
-    <line x1="690" y1="128" x2="746" y2="128" marker-end="url(#arrAmber)"/>
-    <line x1="960" y1="128" x2="1016" y2="128" marker-end="url(#arr)"/>
+  <g fill="#a29372" font-size="10.5">
+    <text x="228" y="150">swap</text>
+    <text x="440" y="150">unlock</text>
+    <text x="630" y="150" fill="#ffb300">beforeSwap</text>
+    <text x="916" y="150">fair</text>
   </g>
-  <g fill="#a29372" font-size="11">
-    <text x="196" y="126">1 swap</text>
-    <text x="446" y="126">2 unlock</text>
-    <text x="694" y="117" fill="#ffb300">3 beforeSwap</text>
-    <text x="962" y="117">4 latestRoundData</text>
-  </g>
+  <line x1="220" y1="164" x2="254" y2="164" stroke="#a29372" marker-end="url(#a)"/>
+  <line x1="434" y1="164" x2="468" y2="164" stroke="#a29372" marker-end="url(#a)"/>
+  <line x1="622" y1="164" x2="656" y2="164" stroke="#ffb300" marker-end="url(#b)"/>
+  <line x1="908" y1="164" x2="942" y2="164" stroke="#a29372" marker-end="url(#a)"/>
   <defs>
-    <marker id="arr" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#a29372"/></marker>
-    <marker id="arrAmber" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#ffb300"/></marker>
+    <marker id="a" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#a29372"/></marker>
+    <marker id="b" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#ffb300"/></marker>
   </defs>
 
-  <!-- decision box -->
-  <rect x="500" y="210" width="700" height="196" fill="#141109" stroke="#2e2716"/>
-  <text x="524" y="240" fill="#f5ecd7" font-size="14" font-weight="bold">THE DECISION (deterministic code — never a prompt, never an app)</text>
-  <g font-size="12.5">
-    <text x="524" y="272" fill="#a29372">pool price vs fair price → adverse deviation (direction-aware)</text>
-    <rect x="524" y="288" width="200" height="44" fill="#0a0906" stroke="#4ade80"/>
-    <text x="624" y="307" fill="#4ade80" text-anchor="middle" font-weight="bold">OK ≤ band/2</text>
-    <text x="624" y="324" fill="#a29372" text-anchor="middle" font-size="11">fee 0.05%</text>
-    <rect x="740" y="288" width="200" height="44" fill="#0a0906" stroke="#ffb300"/>
-    <text x="840" y="307" fill="#ffb300" text-anchor="middle" font-weight="bold">WARN ≤ band</text>
-    <text x="840" y="324" fill="#a29372" text-anchor="middle" font-size="11">fee scales up to 1%</text>
-    <rect x="956" y="288" width="220" height="44" fill="#0a0906" stroke="#ff4d2e" stroke-width="2"/>
-    <text x="1066" y="307" fill="#ff4d2e" text-anchor="middle" font-weight="bold">BLOCK &gt; band → REVERT</text>
-    <text x="1066" y="324" fill="#a29372" text-anchor="middle" font-size="11">swap cannot execute</text>
-    <text x="524" y="362" fill="#ff4d2e">stale feed · paused oracle · invalid price → REVERT (fail closed, always)</text>
-    <text x="524" y="386" fill="#a29372">default band ±3.00% · $WIF stakers tighten it (registry read in the same call)</text>
+  <!-- decision strip -->
+  <g font-size="10.5">
+    <rect x="70" y="214" width="250" height="34" fill="#0a0906" stroke="#4ade80"/>
+    <text x="195" y="236" fill="#4ade80" text-anchor="middle">OK ≤ band/2 · fee 0.05%</text>
+    <rect x="332" y="214" width="250" height="34" fill="#0a0906" stroke="#ffb300"/>
+    <text x="457" y="236" fill="#ffb300" text-anchor="middle">WARN ≤ band · fee scales</text>
+    <rect x="594" y="214" width="286" height="34" fill="#0a0906" stroke="#ff4d2e" stroke-width="2"/>
+    <text x="737" y="236" fill="#ff4d2e" text-anchor="middle">BLOCK &gt; band · tx reverts</text>
+    <rect x="892" y="214" width="318" height="34" fill="#0a0906" stroke="#ff4d2e"/>
+    <text x="1051" y="236" fill="#ff4d2e" text-anchor="middle">frozen / stale reference · reverts</text>
+    <text x="70" y="272" fill="#a29372">No admin key can change a feed or disable a pool. Band lives in a bounded registry (100–800 bps).</text>
   </g>
-  <line x1="855" y1="164" x2="855" y2="206" stroke="#ffb300" stroke-width="1.5" marker-end="url(#arrAmber)"/>
 
-  <!-- bottom row: flywheel + ledger -->
-  <rect x="40" y="440" width="560" height="170" fill="#141109" stroke="#2e2716"/>
-  <text x="64" y="472" fill="#ffb300" font-size="14" font-weight="bold">$WIF FLYWHEEL</text>
-  <g fill="#f5ecd7" font-size="12.5">
-    <text x="64" y="500">1 · Trade guarded → protection you can feel (a blocked rip)</text>
-    <text x="64" y="526">2 · Want it tighter? Stake ≥1,000 $WIF → band down to ±0.25%</text>
-    <text x="64" y="552">3 · $WIF locked while protection is active; unstake = default</text>
-    <text x="64" y="578">4 · Traders return for every stock buy → stake demand recurs</text>
+  <!-- evidence lane -->
+  <rect x="40" y="322" width="600" height="196" fill="#141109" stroke="#2e2716"/>
+  <text x="60" y="346" fill="#ffb300" font-size="12" font-weight="bold">OFFCHAIN — EVIDENCE (never decides)</text>
+  <g fill="#f5ecd7" font-size="11.5">
+    <text x="60" y="372">DISLOCATION TAPE · 10 stocks, Chainlink fair vs Cambrian market</text>
+    <text x="60" y="392" fill="#a29372" font-size="10.5">premium bps · would-block verdict · 24h sparkline · quote confidence</text>
+    <text x="60" y="418">PROOF FEED · chunked eth_getLogs over the hook's lifetime</text>
+    <text x="60" y="438" fill="#a29372" font-size="10.5">guarded swaps, WARN count, distinct wallets — counted, not claimed</text>
+    <text x="60" y="464">VERDICT API · GET /guard/:symbol reads previewGuard onchain</text>
+    <text x="60" y="484" fill="#a29372" font-size="10.5">any wallet or agent can consume the guard without touching the UI</text>
+    <text x="60" y="506" fill="#a29372" font-size="10.5">ADVISORY · TypeSafe Jev scores context; degrades to nothing</text>
   </g>
-  <rect x="640" y="440" width="560" height="170" fill="#141109" stroke="#2e2716"/>
-  <text x="664" y="472" fill="#ffb300" font-size="14" font-weight="bold">OVERPAY LEDGER + RUST API</text>
-  <g fill="#f5ecd7" font-size="12.5">
-    <text x="664" y="500">· Every fill AND every block recorded with the math</text>
-    <text x="664" y="526">· “You overpay off-hours” autopsy → tighten the band</text>
-    <text x="664" y="552">· Axum service re-reads Chainlink independently (/board)</text>
-    <text x="664" y="578">· Saved-$ receipts are the shareable proof (Blockscout-linked)</text>
+
+  <!-- keeper lane -->
+  <rect x="660" y="322" width="580" height="196" fill="#141109" stroke="#2e2716"/>
+  <text x="680" y="346" fill="#ffb300" font-size="12" font-weight="bold">KEEPER — MAY ONLY MOVE THE BAND</text>
+  <g fill="#f5ecd7" font-size="11.5">
+    <text x="680" y="372">1 · 168h of hourly prices (Cambrian) → 1h realized vol</text>
+    <text x="680" y="392">2 · band = clamp(k × vol, 100, 800) bps</text>
+    <text x="680" y="412">3 · setBand(bps, reason) on BandRegistry</text>
+    <text x="680" y="432">4 · hook reads the band live, every swap</text>
+    <text x="680" y="462" fill="#a29372" font-size="10.5">Bounds are immutable. Keeper cannot price, pause, withdraw,</text>
+    <text x="680" y="480" fill="#a29372" font-size="10.5">or loosen past 8%. A broken registry falls back to 3%.</text>
+    <text x="680" y="504" fill="#ffb300" font-size="10.5">Sepolia run: vol 61.5bps → 154bps band, enforced immediately.</text>
+  </g>
+
+  <!-- flywheel -->
+  <rect x="40" y="546" width="1200" height="168" fill="#141109" stroke="#2e2716"/>
+  <text x="60" y="572" fill="#ffb300" font-size="12" font-weight="bold">WHY IT COMPOUNDS</text>
+  <g fill="#f5ecd7" font-size="11.5">
+    <text x="60" y="600">Trade guarded → a blocked buy becomes a FairLimit order at your price, not a dead end.</text>
+    <text x="60" y="622">Every block is a receipt: Chainlink round, feed age, saved dollars → the Overpay Ledger.</text>
+    <text x="60" y="644">The tape shows where the market is dislocated → traders come back when the gap is wide.</text>
+    <text x="60" y="666">Volume → fees to LPs → deeper books → fewer dislocations → the guard gets cheaper to trust.</text>
+    <text x="60" y="692" fill="#a29372" font-size="10.5">No token. No custody. No admin path that weakens a live pool. LP principal is withdrawable at any time.</text>
   </g>
 </svg>

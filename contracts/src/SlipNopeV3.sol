@@ -304,13 +304,14 @@ contract SlipNopeV3 is IHooks {
     }
 
     /// @notice Post-swap guard: a single swap may not leave the pool more than
-    ///         `band` away from fair. Without this, one large trade could dislocate
-    ///         a thin book (the pre-swap check cannot see the resulting price).
-    ///         Reverting here unwinds the whole swap, so nothing settles.
+    ///         `band` away from fair — in **either** direction. The pre-swap
+    ///         check only refuses overpaying; without this, one oversized buy
+    ///         could crash a thin book far below fair, which is just as broken
+    ///         for everyone else in the pool. Reverting here unwinds the swap.
     function afterSwap(
         address,
         PoolKey calldata key,
-        IPoolManager.SwapParams calldata params,
+        IPoolManager.SwapParams calldata,
         BalanceDelta,
         bytes calldata hookData
     ) external override returns (bytes4, int128) {
@@ -321,9 +322,9 @@ contract SlipNopeV3 is IHooks {
         (uint160 sqrtPriceX96,,,) = poolManager.getSlot0(key.toId());
         uint256 postPrice = _poolPriceE18(key, g, sqrtPriceX96);
         uint256 fair = _fairPriceE18(g);
-        uint256 adverse = _adverseBps(key, g, params.zeroForOne, postPrice, fair);
+        uint256 deviation = postPrice > fair ? ((postPrice - fair) * 10_000) / fair : ((fair - postPrice) * 10_000) / fair;
         uint24 band = _bandFor(address(0));
-        if (adverse > band) revert PostSwapOutOfBand(adverse, band, postPrice, fair);
+        if (deviation > band) revert PostSwapOutOfBand(deviation, band, postPrice, fair);
         return (IHooks.afterSwap.selector, 0);
     }
 

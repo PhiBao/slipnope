@@ -158,6 +158,22 @@ contract SlipNopeV3Test is Test, Deployers {
         assertTrue(blocked);
     }
 
+    function test_postSwapBoundsEitherDirection() public {
+        // A buy so large it would crash the book far below fair must revert,
+        // even though buying below fair is "adverse-neutral" for the buyer.
+        vm.prank(keeper);
+        registry.setBand(300, "test");
+        vm.expectRevert(); // PostSwapOutOfBand on the favourable side
+        _buy(200_000 ether);
+    }
+
+    function test_smallTradesUnaffected() public {
+        _buy(1 ether);
+        (uint256 adverse,,, bool blocked,,) = hook.previewGuard(poolKey, _buyDirection(), trader);
+        assertLe(adverse, 300);
+        assertFalse(blocked);
+    }
+
     function test_registryFailureFallsBackToDefault() public {
         // A registry that reverts must not brick the pool: the hook falls back
         // to the immutable 3% default rather than reverting every swap.

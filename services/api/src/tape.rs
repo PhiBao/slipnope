@@ -61,6 +61,9 @@ pub struct TapeRow {
     pub history_min: Option<f64>,
     pub history_max: Option<f64>,
     pub change_24h_pct: Option<f64>,
+    /// True when the premium is so large that it is more likely a data artifact
+    /// than a tradable dislocation. Surfaced rather than hidden.
+    pub suspect: bool,
     /// How much to trust this quote as a *market* price:
     ///   firm    — 24h range within ±3%, quote is stable
     ///   thin    — 24h range wider than ±3%; likely a thin-pool quote
@@ -121,6 +124,8 @@ pub async fn build(state: &AppState) -> Vec<TapeRow> {
         };
         // A buy at this premium is what the hook refuses (adverse deviation).
         let would_block = premium_bps.map(|p| p > BAND_BPS).unwrap_or(false);
+        // Above 15% we stop claiming a tradable dislocation and ask for review.
+        let suspect = premium_bps.map(|p| p.abs() > 1_500).unwrap_or(false);
         let (history_min, history_max, change_24h_pct, quote_confidence) = summarise(&history, market);
 
         rows.push(TapeRow {
@@ -132,6 +137,7 @@ pub async fn build(state: &AppState) -> Vec<TapeRow> {
             market_usd: market,
             premium_bps,
             would_block,
+            suspect,
             feed_age_secs: updated.map(|u| crate::now_secs().saturating_sub(u)),
             history_min,
             history_max,
