@@ -5,6 +5,7 @@ import {
   useAccount,
   useReadContract,
   useReadContracts,
+  useSimulateContract,
   useWriteContract,
   useWaitForTransactionReceipt,
 } from "wagmi";
@@ -90,6 +91,7 @@ export default function GuardCard({ onLedgerChange }: { onLedgerChange: () => vo
   const blocked = preview ? Boolean(preview[3]) : false;
   const poolPrice = preview ? Number(preview[4]) / 1e18 : null;
   const fairPrice = preview ? Number(preview[5]) / 1e18 : null;
+  const fairE18 = preview ? preview[5] : 0n;
 
   const verdict: "OK" | "WARN" | "BLOCK" | null = !preview
     ? null
@@ -98,6 +100,46 @@ export default function GuardCard({ onLedgerChange }: { onLedgerChange: () => vo
       : adverseBps !== null && adverseBps > bandBps / 2
         ? "WARN"
         : "OK";
+
+  const limits = useMemo(
+    () => (fairE18 > 0n ? fairSqrtLimits(fairE18, bandBps) : null),
+    [fairE18, bandBps],
+  );
+  const swapLimit = limits ? (zeroForOne ? limits.buy : limits.sell) : null;
+
+  // Simulate the exact swap the wallet is about to send. This catches a
+  // guard revert and shows how a shallow pool caps an oversized trade.
+  const simArgs = poolKey && swapLimit !== null ? ([poolKey, zeroForOne, amountIn, swapLimit] as const) : undefined;
+  const { data: quote, error: quoteError, isFetching: quoteFetching } = useSimulateContract({
+    address: ROUTER as Address,
+    abi: routerAbi,
+    functionName: "swapExactInput",
+    args: simArgs,
+    account: address,
+    query: {
+      enabled: Boolean(
+        deployed &&
+          poolKey &&
+          address &&
+          amountIn > 0n &&
+          allowance >= amountIn &&
+          swapLimit !== null &&
+          verdict !== "BLOCK",
+      ),
+      refetchInterval: 15_000,
+      retry: false,
+    },
+  });
+
+  const fairOut = useMemo(() => {
+    if (fairE18 === 0n || amountIn === 0n) return 0n;
+    return zeroForOne ? (amountIn * 10n ** 20n) / fairE18 : (amountIn * fairE18) / 10n ** 20n;
+  }, [amountIn, fairE18, zeroForOne]);
+  const quotedOut = quote?.result;
+  const fillPct = quotedOut !== undefined && fairOut > 0n ? Number((quotedOut * 10_000n) / fairOut) / 100 : null;
+  const quoteMessage = quoteError
+    ? ((quoteError as { shortMessage?: string }).shortMessage ?? quoteError.message).slice(0, 140)
+    : null;
 
   const notionalUsd =
     side === "buy" ? amountNum : fairPrice ? amountNum * fairPrice : 0;
@@ -146,10 +188,8 @@ export default function GuardCard({ onLedgerChange }: { onLedgerChange: () => vo
         });
         setPendingHash(ah);
       }
-      // Bound the swap ~3% from Chainlink fair: one trade can never walk the
-      // book to an extreme (the hook's afterSwap check is the hard limit).
-      const fairE18 = preview ? preview[5] : 0n;
-      const limits = fairE18 > 0n ? fairSqrtLimits(fairE18) : null;
+      // Bound the swap at the hook's band: one trade can never walk the book
+      // past it (the hook's afterSwap check is the hard limit).
       if (!limits) throw new Error("Fair price unavailable — guard cannot bound the swap.");
       const hash = await writeContractAsync({
         address: ROUTER as Address,
@@ -306,7 +346,9 @@ export default function GuardCard({ onLedgerChange }: { onLedgerChange: () => vo
             Balance: {formatUnits(usdcBal, 6)} USDC · {Number(formatUnits(nvdaBal, 8)).toFixed(5)} {symbol}
           </span>
           {fee !== null && <span>LP fee this swap: {(fee / 10000).toFixed(2)}%</span>}
-          <span>Guard band: ±{(bandBps / 100).toFixed(2)}%</span>
+          <span>
+            Guard band: ±{(bandBps / 100).toFixed(2)}% · oversized trades stop at the band and refund the rest
+          </span>
         </div>
 
         {/* verdict detail */}
@@ -331,6 +373,29 @@ export default function GuardCard({ onLedgerChange }: { onLedgerChange: () => vo
                 )}
               </div>
             </div>
+          </div>
+        )}
+
+        {isConnected && amountIn > 0n && allowance >= amountIn && verdict !== "BLOCK" && (
+          <div className="num mt-3 text-[11px] leading-relaxed text-[var(--color-faded)]">
+            {quotedOut !== undefined ? (
+              <>
+                Quoted out:{" "}
+                <span className="text-[var(--color-cream)]">
+                  {formatUnits(quotedOut, zeroForOne ? 8 : 6)} {zeroForOne ? symbol : "USDC"}
+                </span>
+                {fillPct !== null && fillPct < 95 && (
+                  <span className="text-[var(--color-amber)]">
+                    {" "}
+                    · the band caps this trade at about {fillPct.toFixed(0)}% of a fair fill; the rest is refunded
+                  </span>
+                )}
+              </>
+            ) : quoteFetching ? (
+              "Quoting this swap…"
+            ) : quoteMessage ? (
+              <span className="text-[var(--color-bad)]">Quote unavailable: {quoteMessage}</span>
+            ) : null}
           </div>
         )}
 

@@ -84,6 +84,7 @@ export default function FairLimitPanel() {
     query: { refetchInterval: 20_000 },
   });
   const fairE18 = preview?.[0]?.status === "success" ? (preview[0].result[5] as bigint) : 0n;
+  const fairBandBps = preview?.[0]?.status === "success" ? Number(preview[0].result[1]) : 300;
 
   // Your orders first, then the newest of everyone else's. Five rows keeps the
   // table scannable while the wider scan above makes sure your order stays in it.
@@ -164,7 +165,7 @@ export default function FairLimitPanel() {
   }
 
   async function fill(id: number) {
-    const limits = fairE18 > 0n ? fairSqrtLimits(fairE18) : null;
+    const limits = fairE18 > 0n ? fairSqrtLimits(fairE18, fairBandBps) : null;
     if (!limits) {
       setMsg("Fair price unavailable — the guard won't fill blind.");
       return;

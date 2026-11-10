@@ -31,9 +31,11 @@ export default function BandCard() {
       </div>
 
       <p className="mt-4 text-xs leading-relaxed text-[var(--color-faded)]">
-        Why a single band: Base Chainlink equity feeds run 24/5 and freeze off-hours by design. A frozen feed is treated
-        as stale and blocks every swap — the guard never guesses at a price. Connect a wallet and the guard card shows
-        your live verdict before you sign, from the same math the hook enforces.
+        A trade that would move the pool past the band is capped at the band: it fills what it can and the router
+        refunds the rest. A swap that starts with the pool already out of band reverts before it executes. Why a single
+        band: Base Chainlink equity feeds run 24/5 and freeze off-hours by design. A frozen feed is treated as stale and
+        blocks every swap — the guard never guesses at a price. Connect a wallet and the guard card shows your live
+        verdict before you sign, from the same math the hook enforces.
         {!isConnected && " Connect to see your verdict."}
       </p>
     </section>

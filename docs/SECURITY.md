@@ -82,9 +82,11 @@ annotation; if both went offline the hook would behave identically.
 
 ## Economic / market risks
 
-- **Thin pools.** A small pool can be walked; the post-swap bound limits how far
-  in one transaction, and the pre-swap check then refuses adverse trades. LPs
-  carry normal impermanent-loss risk.
+- **Thin pools.** A small pool can be walked. The router caps a single trade at
+  the hook's band with a sqrt-price limit derived from the Chainlink fair price,
+  so an oversized trade fills up to the boundary and the unspent input is swept
+  back to the caller. The hook's post-swap bound remains the hard stop for any
+  call that bypasses that limit. LPs carry normal impermanent-loss risk.
 - **Feed disagreement.** If Chainlink and the market genuinely disagree, the
   guard blocks the side that would lose money. That is the product, but it does
   mean a pool can sit one-sided until fair moves or new liquidity arrives.

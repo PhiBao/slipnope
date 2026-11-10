@@ -68,6 +68,8 @@ Fair-price protection used to require trusting an app to warn you before you sig
 3. **Primary workflow:** connect wallet (Base) → buy/sell NVDAc in the guarded pool → hook verdict (OK/WARN/BLOCK) renders *before* you sign, from the same `previewGuard` math the hook enforces → sign → BaseScan receipt.
 4. **Retention loop:** Overpay Ledger records fills *and* blocks with regime context ("you overpay off-hours") → autopsy → tighter discipline by knowing your history → shareable saved-$ receipts.
 
+**Oversized trades stop at the band.** The router sets its sqrt-price limit from the same Chainlink fair price and the same ±3.00% band. A trade large enough to move the book past the band fills up to the boundary, and the router sweeps the unspent input back to the caller in the same transaction. The hook's `afterSwap` check is still the hard stop for any call that bypasses that bound.
+
 ## 3. Architecture
 
 ![What is enforced and what is only evidence](docs/diagrams/system-map.svg)
