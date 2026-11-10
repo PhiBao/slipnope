@@ -14,6 +14,8 @@
 //! Cambrian data is market *evidence*, clearly labelled as such.
 
 mod cambrian;
+mod guard_abi;
+mod jev;
 mod onchain;
 mod proof;
 mod tape;
@@ -93,6 +95,7 @@ pub struct AppState {
     ledger: Arc<RwLock<Vec<LedgerEntry>>>,
     ledger_file: String,
     cambrian: cambrian::Cambrian,
+    jev: jev::Jev,
     /// Snapshot of the Dislocation Tape, rebuilt by a background warmer so the
     /// public endpoint answers in milliseconds and Cambrian quota stays bounded.
     tape_cache: Arc<RwLock<Option<(u64, serde_json::Value)>>>,
@@ -208,6 +211,7 @@ async fn health(State(state): State<Arc<AppState>>) -> Json<serde_json::Value> {
         "rpc": state.rpc,
         "feedReachable": chain.is_ok(),
         "cambrian": state.cambrian.is_configured(),
+        "typesafe": state.jev.is_configured(),
         "bandBps": tape::BAND_BPS,
     }))
 }
@@ -270,6 +274,154 @@ async fn refresh_proof(state: Arc<AppState>) -> serde_json::Value {
     let value = serde_json::to_value(&p).unwrap_or(serde_json::Value::Null);
     *state.proof_cache.write().await = Some((now_secs(), value.clone()));
     value
+}
+
+/// Public guard verdict for one symbol.
+///
+/// For the guarded pool this reports exactly what the hook would do, read from
+/// `previewGuard` onchain (the same function the app renders before signing).
+/// The market premium from the tape is attached as context, never as the verdict.
+async fn get_guard(
+    State(state): State<Arc<AppState>>,
+    Path(symbol): Path<String>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    let stock = tape::UNIVERSE
+        .iter()
+        .find(|s| s.symbol.eq_ignore_ascii_case(&symbol))
+        .ok_or(StatusCode::NOT_FOUND)?;
+
+    let guarded = stock.token.eq_ignore_ascii_case(guard_abi::GUARDED_STOCK);
+
+    // Onchain truth, straight from the hook's own view.
+    let onchain = if guarded {
+        let zero = "0x0000000000000000000000000000000000000000";
+        let buy = state
+            .eth_call(
+                guard_abi::GUARDED_POOL_HOOK,
+                &guard_abi::preview_guard_calldata(true, zero),
+            )
+            .await
+            .ok()
+            .and_then(|h| guard_abi::decode_preview_guard(&h));
+        let sell = state
+            .eth_call(
+                guard_abi::GUARDED_POOL_HOOK,
+                &guard_abi::preview_guard_calldata(false, zero),
+            )
+            .await
+            .ok()
+            .and_then(|h| guard_abi::decode_preview_guard(&h));
+        buy.zip(sell)
+    } else {
+        None
+    };
+
+    // Context: market quote vs Chainlink fair (the tape's numbers).
+    let fair_usd = state
+        .eth_call(stock.feed, onchain::SEL_LATEST_ROUND)
+        .await
+        .ok()
+        .and_then(|h| onchain::decode_round(&h))
+        .map(|(p, u)| (p, u));
+    let market = if state.cambrian.is_configured() {
+        let live = state.cambrian.price_current(stock.token, std::time::Duration::from_secs(600)).await;
+        match live {
+            Some(p) => Some(p),
+            None => state
+                .cambrian
+                .price_hour(stock.token, 24, std::time::Duration::from_secs(6 * 3600))
+                .await
+                .last()
+                .map(|(_, p)| *p),
+        }
+    } else {
+        None
+    };
+    let premium_bps = match (fair_usd.map(|(p, _)| p), market) {
+        (Some(f), Some(m)) if f > 0.0 => Some((((m - f) / f) * 10_000.0).round() as i64),
+        _ => None,
+    };
+
+    let (verdict, buy_blocked, sell_blocked, pool_price, hook_fair, band) = match &onchain {
+        Some((b, s)) => {
+            let v = if b.blocked {
+                "BUY_BLOCKED"
+            } else if s.blocked {
+                "SELL_BLOCKED"
+            } else if b.adverse_bps > b.band_bps / 2 {
+                "WARN"
+            } else {
+                "OK"
+            };
+            (
+                v,
+                b.blocked,
+                s.blocked,
+                Some(b.pool_price_e18 as f64 / 1e18),
+                Some(b.fair_price_e18 as f64 / 1e18),
+                Some(b.band_bps as i64),
+            )
+        }
+        None => (
+            if premium_bps.map(|p| p > tape::BAND_BPS).unwrap_or(false) {
+                "NO_GUARDED_POOL_DISLOCATED"
+            } else {
+                "NO_GUARDED_POOL"
+            },
+            false,
+            false,
+            None,
+            fair_usd.map(|(p, _)| p),
+            None,
+        ),
+    };
+
+    // Deterministic staleness first; the advisory gets the rule, not a guess.
+    let feed_age = fair_usd.map(|(_, u)| now_secs().saturating_sub(u));
+    let max_age = 4 * 24 * 3600u64;
+    let reference_stale = feed_age.map(|a| a > max_age).unwrap_or(true);
+
+    let advisory = state
+        .jev
+        .assess(
+            stock.symbol,
+            serde_json::json!({
+                "symbol": stock.symbol,
+                "guardedPool": guarded,
+                "marketPremiumBps": premium_bps,
+                "adverseBpsAtGuard": onchain.as_ref().map(|(b, _)| b.adverse_bps),
+                "bandBps": band.unwrap_or(tape::BAND_BPS as i64),
+                "referenceAgeSecs": feed_age,
+                "referenceMaxAgeSecs": max_age,
+                "referenceIsStaleByRule": reference_stale,
+                "referencePolicy": "Tokenized-equity Chainlink feeds update 24/5 and deliberately hold their last value overnight and at weekends. A hold shorter than the maximum age below is normal operation, NOT staleness. Only a hold longer than the maximum, or a frozen feed during a corporate action, counts as stale.",
+                "marketSource": "Cambrian Uniswap v3 quote on Base (offchain, evidence only)",
+                "referenceSource": "Chainlink tokenized-equity feed read onchain (the only value the hook uses)"
+            }),
+        )
+        .await;
+
+    Ok(Json(serde_json::json!({
+        "symbol": stock.symbol,
+        "name": stock.name,
+        "token": stock.token,
+        "feed": stock.feed,
+        "guardedPool": guarded,
+        "verdict": verdict,
+        "buyBlocked": buy_blocked,
+        "sellBlocked": sell_blocked,
+        "bandBps": band,
+        "poolPriceUsd": pool_price,
+        "hookFairUsd": hook_fair,
+        "fairUsd": fair_usd.map(|(p, _)| p),
+        "marketUsd": market,
+        "premiumBps": premium_bps,
+        "feedAgeSecs": fair_usd.map(|(_, u)| now_secs().saturating_sub(u)),
+        "advisory": advisory,
+        "advisoryDegraded": advisory.is_none(),
+        "enforcement": "onchain (SlipNope hook) — this endpoint reports it, it does not decide",
+        "generatedAt": now_secs(),
+    })))
 }
 
 async fn board(State(state): State<Arc<AppState>>) -> Result<Json<Vec<BoardRow>>, StatusCode> {
@@ -358,6 +510,7 @@ async fn main() {
     let port: u16 = std::env::var("PORT").ok().and_then(|p| p.parse().ok()).unwrap_or(8787);
     let ledger_file = std::env::var("LEDGER_FILE").unwrap_or_else(|_| "ledger.jsonl".to_string());
     let cambrian_key = std::env::var("CAMBRIAN_API_KEY").unwrap_or_default();
+    let typesafe_key = std::env::var("TYPESAFE_API_KEY").unwrap_or_default();
 
     let mut entries: Vec<LedgerEntry> = Vec::new();
     if let Ok(content) = tokio::fs::read_to_string(&ledger_file).await {
@@ -375,6 +528,7 @@ async fn main() {
         ledger: Arc::new(RwLock::new(entries)),
         ledger_file,
         cambrian: cambrian::Cambrian::new(cambrian_key),
+        jev: jev::Jev::new(typesafe_key),
         tape_cache: Arc::new(RwLock::new(None)),
         proof_cache: Arc::new(RwLock::new(None)),
     });
@@ -417,6 +571,7 @@ async fn main() {
         .route("/health", get(health))
         .route("/tape", get(get_tape))
         .route("/proof", get(get_proof))
+        .route("/guard/:symbol", get(get_guard))
         .route("/board", get(board))
         .route("/ledger", post(post_ledger))
         .route("/ledger/:wallet", get(get_ledger))

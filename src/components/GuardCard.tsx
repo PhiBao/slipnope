@@ -23,6 +23,7 @@ import {
   EXPLORER,
 } from "@/lib/contracts";
 import { recordEntry, savedEstimate } from "@/lib/ledger";
+import GuardApiPanel from "./GuardApiPanel";
 
 type Side = "buy" | "sell";
 
@@ -292,6 +293,8 @@ export default function GuardCard({ onLedgerChange }: { onLedgerChange: () => vo
             </div>
           </div>
         )}
+
+        {deployed && <GuardApiPanel />}
 
         {deployed && previewLoading && !preview && (
           <p className="num mt-5 text-xs text-[var(--color-faded)]">Reading pool + Chainlink…</p>
