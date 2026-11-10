@@ -14,6 +14,7 @@ import {
   ROUTER,
   USDC,
   STOCKS,
+  CHAIN_ID,
   hookAbi,
   routerAbi,
   erc20Abi,
@@ -24,11 +25,13 @@ import {
 } from "@/lib/contracts";
 import { recordEntry, savedEstimate } from "@/lib/ledger";
 import GuardApiPanel from "./GuardApiPanel";
+import ChainNotice from "./ChainNotice";
 
 type Side = "buy" | "sell";
 
 export default function GuardCard({ onLedgerChange }: { onLedgerChange: () => void }) {
-  const { address, isConnected } = useAccount();
+  const { address, isConnected, chainId } = useAccount();
+  const wrongChain = isConnected && chainId !== undefined && chainId !== CHAIN_ID;
   const [side, setSide] = useState<Side>("buy");
   const [symbol, setSymbol] = useState("NVDAc");
   const activeStock = STOCKS.find((s) => s.symbol === symbol) ?? STOCKS[0];
@@ -107,6 +110,10 @@ export default function GuardCard({ onLedgerChange }: { onLedgerChange: () => vo
   async function handleAction() {
     setErrorMsg(null);
     if (!deployed || !poolKey || !address) return;
+    if (wrongChain) {
+      setErrorMsg("Switch to Base first — the guard only settles there.");
+      return;
+    }
 
     // BLOCK path: the hook would revert. Record the save instead of burning gas.
     if (verdict === "BLOCK" && adverseBps !== null && poolPrice && fairPrice) {
@@ -280,10 +287,17 @@ export default function GuardCard({ onLedgerChange }: { onLedgerChange: () => vo
           </label>
           <button
             onClick={handleAction}
-            disabled={!isConnected || !deployed || busy || confirming || amountIn === 0n}
+            disabled={!isConnected || !deployed || busy || confirming || amountIn === 0n || wrongChain}
+            title={wrongChain ? "Switch to Base first" : undefined}
             className="px-6 py-3 bg-[var(--color-amber)] text-black font-black tracking-wide text-sm uppercase disabled:opacity-30 disabled:cursor-not-allowed hover:bg-[#ffc233] transition-colors"
           >
-            {busy || confirming ? "Working…" : verdict === "BLOCK" ? "Attempt — hook will block" : "Swap under guard"}
+            {wrongChain
+              ? "Switch to Base first"
+              : busy || confirming
+                ? "Working…"
+                : verdict === "BLOCK"
+                  ? "Attempt — hook will block"
+                  : "Swap under guard"}
           </button>
         </div>
 
@@ -319,6 +333,8 @@ export default function GuardCard({ onLedgerChange }: { onLedgerChange: () => vo
             </div>
           </div>
         )}
+
+        <ChainNotice what="Guarded swaps" />
 
         {deployed && <GuardApiPanel />}
 

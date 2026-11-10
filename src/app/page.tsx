@@ -1,53 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useAccount, useConnect, useDisconnect, useSwitchChain } from "wagmi";
 import Tape from "@/components/Tape";
+import WalletButton from "@/components/WalletButton";
 import ProofStrip from "@/components/ProofStrip";
 import FairLimitPanel from "@/components/FairLimitPanel";
 import GuardCard from "@/components/GuardCard";
 import BandCard from "@/components/BandCard";
 import LedgerPanel from "@/components/LedgerPanel";
 import { loadLedger, type LedgerEntry } from "@/lib/ledger";
-import { CHAIN_ID, EXPLORER, POOL_MANAGER, SLIPNOPE, ROUTER, shortAddr } from "@/lib/contracts";
-
-function WalletButton() {
-  const { address, isConnected, chainId } = useAccount();
-  const { connect, connectors, isPending } = useConnect();
-  const { disconnect } = useDisconnect();
-  const { switchChain } = useSwitchChain();
-
-  if (!isConnected) {
-    return (
-      <button
-        onClick={() => connect({ connector: connectors[0] })}
-        disabled={isPending}
-        className="px-4 py-2 bg-[var(--color-amber)] text-black text-sm font-black uppercase tracking-wide disabled:opacity-40 hover:bg-[#ffc233]"
-      >
-        {isPending ? "Connecting…" : "Connect wallet"}
-      </button>
-    );
-  }
-  if (chainId !== CHAIN_ID) {
-    return (
-      <button
-        onClick={() => switchChain({ chainId: CHAIN_ID })}
-        className="px-4 py-2 bg-[var(--color-bad)] text-black text-sm font-black uppercase tracking-wide"
-      >
-        Switch to Base
-      </button>
-    );
-  }
-  return (
-    <button
-      onClick={() => disconnect()}
-      className="num px-4 py-2 border border-[var(--color-line)] text-sm hover:border-[var(--color-amber-dim)]"
-      title="Disconnect"
-    >
-      {shortAddr(address ?? "")} · 8453
-    </button>
-  );
-}
+import { EXPLORER, POOL_MANAGER, SLIPNOPE, ROUTER, shortAddr } from "@/lib/contracts";
 
 function ProofRow({ label, addr }: { label: string; addr: string }) {
   return (

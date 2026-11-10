@@ -7,6 +7,7 @@ import {
   FAIR_LIMIT,
   USDC,
   STOCKS,
+  CHAIN_ID,
   erc20Abi,
   fairLimitAbi,
   fairSqrtLimits,
@@ -14,8 +15,10 @@ import {
   hookAbi,
   SLIPNOPE,
   fmtUsd,
+  shortAddr,
   EXPLORER,
 } from "@/lib/contracts";
+import ChainNotice from "./ChainNotice";
 
 /**
  * "The block isn't a dead end."
@@ -25,7 +28,8 @@ import {
  * enough; the owner can withdraw at any moment.
  */
 export default function FairLimitPanel() {
-  const { address, isConnected } = useAccount();
+  const { address, isConnected, chainId } = useAccount();
+  const wrongChain = isConnected && chainId !== undefined && chainId !== CHAIN_ID;
   const [amount, setAmount] = useState("1");
   const [capBps, setCapBps] = useState("100");
   const [days, setDays] = useState("7");
@@ -55,8 +59,9 @@ export default function FairLimitPanel() {
   const allowance = data?.[3]?.status === "success" ? (data[3].result as bigint) : 0n;
   const balance = data?.[4]?.status === "success" ? (data[4].result as bigint) : 0n;
 
-  // Most recent three orders, newest first.
-  const ids = Array.from({ length: Math.min(3, Math.max(0, nextId - 1)) }, (_, i) => nextId - 1 - i);
+  // Scan a wider window than we render, so a wallet's own order does not fall
+  // off the list when other people park orders after it.
+  const ids = Array.from({ length: Math.min(8, Math.max(0, nextId - 1)) }, (_, i) => nextId - 1 - i);
   const { data: orders } = useReadContracts({
     contracts: deployed
       ? ids.map((id) => ({ address: FAIR_LIMIT as Address, abi: fairLimitAbi, functionName: "orders" as const, args: [BigInt(id)] }))
@@ -80,6 +85,27 @@ export default function FairLimitPanel() {
   });
   const fairE18 = preview?.[0]?.status === "success" ? (preview[0].result[5] as bigint) : 0n;
 
+  // Your orders first, then the newest of everyone else's. Five rows keeps the
+  // table scannable while the wider scan above makes sure your order stays in it.
+  const rows = ids.flatMap((id, i) => {
+    const o = orders?.[i]?.status === "success" ? orders[i].result : null;
+    if (!o) return [];
+    const [owner, amountIn, maxPremium, , , isOpen] = o as readonly [Address, bigint, number, bigint, bigint, boolean];
+    const st = statuses?.[i]?.status === "success" ? statuses[i].result : null;
+    return [
+      {
+        id,
+        owner,
+        amountIn,
+        maxPremium: Number(maxPremium),
+        isOpen,
+        isMine: Boolean(address) && owner.toLowerCase() === address?.toLowerCase(),
+        status: st as readonly [boolean, bigint, boolean] | null,
+      },
+    ];
+  });
+  const visible = [...rows].sort((a, b) => Number(b.isMine) - Number(a.isMine) || b.id - a.id).slice(0, 5);
+
   const { writeContractAsync } = useWriteContract();
   const { isLoading: confirming } = useWaitForTransactionReceipt({ hash });
 
@@ -93,11 +119,22 @@ export default function FairLimitPanel() {
       setTimeout(() => refetch(), 4000);
     } catch (e) {
       const m = e instanceof Error ? e.message : String(e);
-      setMsg(
-        m.includes("PremiumTooHigh")
-          ? "The hook says this book is still too far from fair — the order stays parked."
-          : m.slice(0, 180),
-      );
+      if (m.includes("User rejected") || m.includes("User denied") || m.includes("4001")) {
+        setMsg("Rejected in your wallet. Nothing moved.");
+      } else if (m.includes("NotOwner")) {
+        setMsg("Only the wallet that placed this order can withdraw it. Fills are open to anyone.");
+      } else if (m.includes("OrderClosed")) {
+        setMsg("That order was already filled or withdrawn. Updating the list…");
+        setTimeout(() => refetch(), 800);
+      } else if (m.includes("PremiumTooHigh")) {
+        setMsg("The hook says this book is still too far from fair — the order stays parked.");
+      } else if (m.includes("InsufficientBalance") || m.includes("transfer amount exceeds balance")) {
+        setMsg("Not enough USDC in this wallet for that order.");
+      } else if (m.includes("Expired")) {
+        setMsg("That order has expired. Place a new one.");
+      } else {
+        setMsg(m.slice(0, 180));
+      }
     } finally {
       setBusy(false);
     }
@@ -167,6 +204,8 @@ export default function FairLimitPanel() {
         </div>
       </div>
 
+      <ChainNotice what="Fair-Limit orders" />
+
       {deployed ? (
         <>
           <div className="mt-4 grid sm:grid-cols-[1fr_auto_auto_auto] gap-2">
@@ -202,7 +241,8 @@ export default function FairLimitPanel() {
             </label>
             <button
               onClick={place}
-              disabled={!isConnected || busy || confirming}
+              disabled={!isConnected || busy || confirming || wrongChain}
+              title={!isConnected ? "Connect a wallet first" : wrongChain ? "Switch to Base first" : undefined}
               className="px-5 py-2.5 bg-[var(--color-amber)] text-black text-sm font-black uppercase disabled:opacity-30 hover:bg-[#ffc233]"
             >
               {allowance < parseUnits(amount || "0", 6) ? "Approve" : "Park order"}
@@ -210,7 +250,7 @@ export default function FairLimitPanel() {
           </div>
           <div className="num mt-2 text-[11px] text-[var(--color-faded)]">
             Balance {Number(formatUnits(balance, 6)).toFixed(2)} USDC · cap cannot exceed the guard&apos;s widest band
-            · fills read the hook, never a local price
+            · fills read the hook, never a local price · withdraw is owner-only
           </div>
 
           <div className="mt-4 border border-[var(--color-line)]">
@@ -222,18 +262,23 @@ export default function FairLimitPanel() {
               <div />
             </div>
             {ids.length === 0 && <div className="p-3 num text-xs text-[var(--color-faded)]">No orders yet.</div>}
-            {ids.map((id, i) => {
-              const o = orders?.[i]?.status === "success" ? orders[i].result : null;
-              const st = statuses?.[i]?.status === "success" ? statuses[i].result : null;
-              if (!o) return null;
-              const [, amountIn, maxPremium, , , isOpen] = o as readonly [Address, bigint, number, bigint, bigint, boolean];
+            {ids.length > 0 && visible.length === 0 && (
+              <div className="p-3 num text-xs text-[var(--color-faded)]">Reading orders…</div>
+            )}
+            {visible.map(({ id, owner, amountIn, maxPremium, isOpen, isMine, status: st }) => {
               const fillable = st ? Boolean(st[2]) : false;
+              const actionBlocked = !isConnected || wrongChain;
               return (
                 <div key={id} className="grid grid-cols-[3rem_1fr_1fr_5rem_auto] gap-2 px-3 py-2.5 num text-xs items-center border-b border-[var(--color-line)] last:border-b-0">
                   <div className="text-[var(--color-faded)]">{id}</div>
-                  <div>{fmtUsd(Number(formatUnits(amountIn, 6)))} USDC</div>
-                  <div className={Number(maxPremium) <= 100 ? "text-[var(--color-amber)]" : ""}>
-                    +{(Number(maxPremium) / 100).toFixed(2)}%
+                  <div>
+                    {fmtUsd(Number(formatUnits(amountIn, 6)))} USDC
+                    <div className="text-[9px] tracking-[0.08em] uppercase text-[var(--color-faded)]">
+                      {isMine ? <span className="text-[var(--color-amber)]">your order</span> : `by ${shortAddr(owner)}`}
+                    </div>
+                  </div>
+                  <div className={maxPremium <= 100 ? "text-[var(--color-amber)]" : ""}>
+                    +{(maxPremium / 100).toFixed(2)}%
                   </div>
                   <div className={isOpen ? (fillable ? "text-[var(--color-good)]" : "text-[var(--color-faded)]") : "text-[var(--color-faded)]"}>
                     {isOpen ? (fillable ? "fillable" : "waiting") : "closed"}
@@ -243,18 +288,30 @@ export default function FairLimitPanel() {
                       <>
                         <button
                           onClick={() => fill(id)}
-                          disabled={busy || !fillable}
+                          disabled={busy || !fillable || actionBlocked}
+                          title={
+                            !isConnected
+                              ? "Connect a wallet to fill"
+                              : wrongChain
+                                ? "Switch to Base to fill"
+                                : !fillable
+                                  ? "The hook has not cleared this order yet"
+                                  : undefined
+                          }
                           className="px-2 py-1 border border-[var(--color-amber)] text-[var(--color-amber)] text-[10px] font-bold uppercase disabled:opacity-30"
                         >
                           Fill
                         </button>
-                        <button
-                          onClick={() => run(() => writeContractAsync({ address: FAIR_LIMIT as Address, abi: fairLimitAbi, functionName: "cancel", args: [BigInt(id)] }), "Withdrawn.")}
-                          disabled={busy}
-                          className="px-2 py-1 border border-[var(--color-line)] text-[10px] font-bold uppercase text-[var(--color-faded)] disabled:opacity-30"
-                        >
-                          Withdraw
-                        </button>
+                        {isMine && (
+                          <button
+                            onClick={() => run(() => writeContractAsync({ address: FAIR_LIMIT as Address, abi: fairLimitAbi, functionName: "cancel", args: [BigInt(id)] }), "Withdrawn.")}
+                            disabled={busy || actionBlocked}
+                            title={wrongChain ? "Switch to Base to withdraw" : "Withdraw this order back to your wallet"}
+                            className="px-2 py-1 border border-[var(--color-line)] text-[10px] font-bold uppercase text-[var(--color-faded)] disabled:opacity-30"
+                          >
+                            Withdraw
+                          </button>
+                        )}
                       </>
                     )}
                   </div>
