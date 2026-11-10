@@ -1,0 +1,123 @@
+1
+00:00:00,100 --> 00:00:03,188
+Tokenized stocks trade around the clock.
+
+2
+00:00:03,137 --> 00:00:06,171
+The market that sets their price does not.
+
+3
+00:00:06,171 --> 00:00:12,864
+In that gap, people quietly pay more for a share than it is worth, and
+nothing in a normal swap stops them.
+
+4
+00:00:13,490 --> 00:00:17,736
+This is every tokenized stock on Base, priced two ways.
+
+5
+00:00:17,686 --> 00:00:22,048
+The reference price, from Chainlink, read straight from the chain.
+
+6
+00:00:22,048 --> 00:00:25,134
+And what the market is actually charging.
+
+7
+00:00:25,134 --> 00:00:29,783
+When those two drift apart, the difference comes out of the buyer's
+pocket.
+
+8
+00:00:29,783 --> 00:00:32,516
+Nothing warns you before you click.
+
+9
+00:00:33,140 --> 00:00:36,371
+SlipNope moves the check inside the trade.
+
+10
+00:00:36,320 --> 00:00:41,007
+As the swap goes through, the pool compares its own price to the
+reference.
+
+11
+00:00:41,007 --> 00:00:43,820
+Inside the band, it clears.
+
+12
+00:00:43,820 --> 00:00:46,671
+Near the edge, the fee climbs.
+
+13
+00:00:46,671 --> 00:00:51,438
+Past it, the swap is refused, and the money never leaves your wallet.
+
+14
+00:00:52,050 --> 00:00:56,648
+This is a real transaction on Base, sent by the pool itself.
+
+15
+00:00:56,597 --> 00:01:00,868
+It tried to buy at a price more than six percent above the reference.
+
+16
+00:01:00,868 --> 00:01:04,645
+The chain recorded a failure, and not a cent moved.
+
+17
+00:01:04,645 --> 00:01:07,391
+That refusal is the product.
+
+18
+00:01:08,000 --> 00:01:14,694
+Three markets are live: Nvidia, Apple and Tesla stock tokens, each
+matched to its own reference feed.
+
+19
+00:01:14,644 --> 00:01:19,631
+Two of them were seeded exactly at the reference price, to the last
+decimal.
+
+20
+00:01:19,631 --> 00:01:27,886
+Fourteen swaps have already been guarded, from four different wallets,
+and you can verify every pool and every refusal on the public chain.
+
+21
+00:01:28,489 --> 00:01:31,459
+And a refusal is not a dead end.
+
+22
+00:01:31,409 --> 00:01:35,251
+You can park the order at the most you are willing to pay.
+
+23
+00:01:35,251 --> 00:01:40,525
+It waits there until the book comes back to you, and you can take it
+back at any moment.
+
+24
+00:01:40,525 --> 00:01:43,284
+The guard does not just say no.
+
+25
+00:01:43,284 --> 00:01:45,394
+It holds your place.
+
+26
+00:01:46,000 --> 00:01:50,390
+The guard is open source, tested, and running on Base right now.
+
+27
+00:01:50,340 --> 00:01:54,519
+Every pool, every refusal, every receipt is public.
+
+28
+00:01:54,519 --> 00:01:56,251
+Overpay?
+
+29
+00:01:56,251 --> 00:01:57,748
+Nope.
+

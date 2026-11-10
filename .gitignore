@@ -17,3 +17,6 @@ services/api/ledger.jsonl
 .vercel/
 .vercel
 .env*
+
+# demo video (large; produced by open-video-demo)
+demo/*.mp4

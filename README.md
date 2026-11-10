@@ -1,6 +1,6 @@
 # SlipNope — overpay? nope.
 
-**Live app:** https://slipnope.vercel.app · **Chain:** Base (mainnet 8453 · Sepolia verification 84532) · **Season:** Base Stocks Maxxing — Programmable Stock Markets
+**Live app:** https://slipnope.vercel.app · **Demo video:** [`demo/slipnope-demo.mp4`](demo/slipnope-demo.mp4) (118s) · **Chain:** Base (mainnet 8453 · Sepolia 84532) · **Season:** Base Stocks Maxxing — Programmable Stock Markets · **Submission pack:** [`docs/SUBMISSION.md`](docs/SUBMISSION.md)
 
 > Tokenized stocks trade 24/7. The stock market doesn't. In the gap, thin books drift far from fair value — and every wallet lets you click buy anyway. SlipNope is a Uniswap v4 hook that stands *inside* your swap: it reads the Chainlink fair price mid-transaction and **reverts the trade if you would overpay**. Dashboards warn. Pools enforce.
 
