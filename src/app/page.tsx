@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useAccount, useConnect, useDisconnect, useSwitchChain } from "wagmi";
 import Tape from "@/components/Tape";
+import ProofStrip from "@/components/ProofStrip";
 import GuardCard from "@/components/GuardCard";
 import BandCard from "@/components/BandCard";
 import LedgerPanel from "@/components/LedgerPanel";
@@ -119,6 +120,7 @@ export default function Home() {
       </section>
 
       <div className="space-y-10">
+        <ProofStrip />
         <Tape />
         <GuardCard onLedgerChange={refresh} />
         <div className="grid lg:grid-cols-2 gap-6 items-stretch">

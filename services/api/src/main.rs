@@ -15,6 +15,7 @@
 
 mod cambrian;
 mod onchain;
+mod proof;
 mod tape;
 
 use axum::{
@@ -31,7 +32,10 @@ use std::{
 use tokio::sync::RwLock;
 use tower_http::cors::CorsLayer;
 
-const DEFAULT_RPC: &str = "https://mainnet.base.org";
+const DEFAULT_RPC: &str = "https://base-rpc.publicnode.com";
+
+/// SlipNope hook on Base mainnet (v2: beforeSwap + afterSwap).
+const HOOK: &str = "0xee7344d34b3ec4f2ad24a668bc0d84e55de640c0";
 
 // Chainlink tokenized-equity feeds (Base mainnet, verified onchain 2026-11-10)
 const FEEDS: [(&str, &str); 3] = [
@@ -92,6 +96,8 @@ pub struct AppState {
     /// Snapshot of the Dislocation Tape, rebuilt by a background warmer so the
     /// public endpoint answers in milliseconds and Cambrian quota stays bounded.
     tape_cache: Arc<RwLock<Option<(u64, serde_json::Value)>>>,
+    /// Snapshot of the onchain proof counters (GuardAllowed logs).
+    proof_cache: Arc<RwLock<Option<(u64, serde_json::Value)>>>,
 }
 
 // ---------------------------------------------------------------- rpc
@@ -117,6 +123,74 @@ impl AppState {
             .map(|s| s.trim_start_matches("0x").to_string())
             .ok_or_else(|| format!("rpc error: {resp}"))
     }
+
+    pub async fn block_number(&self) -> Result<u64, String> {
+        let body = serde_json::json!({"jsonrpc":"2.0","id":1,"method":"eth_blockNumber","params":[]});
+        let resp: serde_json::Value = self
+            .http
+            .post(&self.rpc)
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| e.to_string())?
+            .json()
+            .await
+            .map_err(|e| e.to_string())?;
+        u64::from_str_radix(
+            resp["result"].as_str().unwrap_or("0x0").trim_start_matches("0x"),
+            16,
+        )
+        .map_err(|e| e.to_string())
+    }
+
+    pub async fn get_logs(
+        &self,
+        address: &str,
+        topic0: &str,
+        from: u64,
+        to: u64,
+    ) -> Result<Vec<LogEntry>, String> {
+        let body = serde_json::json!({
+            "jsonrpc": "2.0", "id": 1, "method": "eth_getLogs",
+            "params": [{
+                "address": address,
+                "fromBlock": format!("0x{from:x}"),
+                "toBlock": format!("0x{to:x}"),
+                "topics": [topic0]
+            }]
+        });
+        let resp: serde_json::Value = self
+            .http
+            .post(&self.rpc)
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| e.to_string())?
+            .json()
+            .await
+            .map_err(|e| e.to_string())?;
+        let arr = resp["result"].as_array().ok_or_else(|| format!("rpc error: {resp}"))?;
+        Ok(arr
+            .iter()
+            .map(|l| LogEntry {
+                transaction_hash: l["transactionHash"].as_str().unwrap_or_default().to_string(),
+                block_number: l["blockNumber"].as_str().unwrap_or("0x0").to_string(),
+                data: l["data"].as_str().unwrap_or_default().to_string(),
+                topics: l["topics"]
+                    .as_array()
+                    .map(|t| t.iter().map(|x| x.as_str().unwrap_or_default().to_string()).collect())
+                    .unwrap_or_default(),
+            })
+            .collect())
+    }
+}
+
+/// Minimal eth_getLogs entry.
+pub struct LogEntry {
+    pub transaction_hash: String,
+    pub block_number: String,
+    pub data: String,
+    pub topics: Vec<String>,
 }
 
 pub fn now_secs() -> u64 {
@@ -175,6 +249,26 @@ async fn refresh_tape(state: Arc<AppState>) -> serde_json::Value {
         },
     });
     *state.tape_cache.write().await = Some((now_secs(), value.clone()));
+    value
+}
+
+/// Onchain proof: how many swaps the guard actually adjudicated.
+async fn get_proof(State(state): State<Arc<AppState>>) -> Json<serde_json::Value> {
+    let cached = state.proof_cache.read().await.clone();
+    match cached {
+        Some((at, value)) => Json(serde_json::json!({
+            "cachedAt": at,
+            "staleSecs": now_secs().saturating_sub(at),
+            "proof": value,
+        })),
+        None => Json(serde_json::json!({ "proof": null, "warming": true })),
+    }
+}
+
+async fn refresh_proof(state: Arc<AppState>) -> serde_json::Value {
+    let p = proof::build(&state, HOOK).await;
+    let value = serde_json::to_value(&p).unwrap_or(serde_json::Value::Null);
+    *state.proof_cache.write().await = Some((now_secs(), value.clone()));
     value
 }
 
@@ -282,6 +376,7 @@ async fn main() {
         ledger_file,
         cambrian: cambrian::Cambrian::new(cambrian_key),
         tape_cache: Arc::new(RwLock::new(None)),
+        proof_cache: Arc::new(RwLock::new(None)),
     });
 
     // Background warmer: keeps the tape hot so public reads are instant and
@@ -303,9 +398,25 @@ async fn main() {
         });
     }
 
+    // Proof warmer: log scan every 5 minutes (chunked eth_getLogs).
+    {
+        let warmer = state.clone();
+        tokio::spawn(async move {
+            loop {
+                let value = refresh_proof(warmer.clone()).await;
+                println!(
+                    "proof refreshed: {} guarded swaps, {} warn",
+                    value["guarded_swaps"], value["warn_swaps"]
+                );
+                tokio::time::sleep(std::time::Duration::from_secs(300)).await;
+            }
+        });
+    }
+
     let app = Router::new()
         .route("/health", get(health))
         .route("/tape", get(get_tape))
+        .route("/proof", get(get_proof))
         .route("/board", get(board))
         .route("/ledger", post(post_ledger))
         .route("/ledger/:wallet", get(get_ledger))
